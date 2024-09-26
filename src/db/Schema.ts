@@ -96,13 +96,12 @@ export const TagRelations = relations(Tag, ({ one, many }) => ({
 export const User = pgTable('User', {
 	id,
 
-	emial: varchar('email', { length: 256 }).unique().notNull(),
+	email: varchar('email', { length: 64 }).unique().notNull(),
 	username: varchar('username', { length: 64 }).unique().notNull(),
 	profilePicture: bytea('profile_picture'),
 	password: varchar('password', { length: 256 }).notNull(),
-	roleId: uuid('role_id')
-		.references(() => UserRole.id)
-		.notNull(),
+	roleId: uuid('role_id').references(() => UserRole.id),
+	refreshToken: varchar('refresh_token', { length: 512 }),
 
 	createdAt,
 	updatedAt,
@@ -118,7 +117,7 @@ export const UserRelations = relations(User, ({ one, many }) => ({
 	datasets: many(SDDataset),
 	generationBatches: many(SDGenerationBatch),
 	containers: many(SDContainer),
-	asdBaseItems: many(SDBaseItem),
+	sdBaseItems: many(SDBaseItem),
 	modelFiles: many(SDModelFile),
 }))
 
