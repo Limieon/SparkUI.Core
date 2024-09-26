@@ -178,6 +178,20 @@ router
 	})
 	.use(jwtAuth)
 
+// Retrieve public user profile
+router.get('/profile', async (req, res) => {
+	const reqUserId = req.query.userId ? (req.query.userId as string) : req.user.id
+	const qRes = await db.select().from(User).where(eq(User.id, reqUserId))
+	if (qRes.length < 1) return res.status(404).json({ message: 'User not found!' })
+	const user = qRes[0]
+
+	return res.status(200).json({
+		id: user.id,
+		username: user.username,
+		profilePicture: user.profilePicture ? `/api/v1/user/${user.id}/profile_picture` : null,
+	})
+})
+
 router
 	.get('/:userId/profile_picture', async (req, res) => {
 		const { userId } = req.params
