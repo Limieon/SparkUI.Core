@@ -13,6 +13,18 @@ import {
 	SPARKUI_CORE_DEBUG,
 } from '../../../Env'
 
+import Sharp from 'sharp'
+import Multer from 'multer'
+
+import { jwtAuth } from '../../../Server'
+
+const upload = Multer({
+	storage: Multer.memoryStorage(),
+	limits: {
+		fileSize: 5 * 1048576,
+	},
+})
+
 const router = Router()
 
 interface SPostRegister {
@@ -26,7 +38,7 @@ interface SPostAuth {
 	password: string
 }
 
-interface JWTPayload {
+export interface JWTPayload {
 	id: string
 	name: string
 	email: string
@@ -52,8 +64,6 @@ router.post('/register', async (req, res) => {
 			.from(User)
 			.where(or(eq(User.email, email), eq(User.username, username)))
 
-		logger.info(user)
-
 		if (user.length > 0) return res.status(400).json({ message: 'Username or Email already taken!' })
 
 		const hashedPassword = await Bcrypt.hash(password, 10)
@@ -66,8 +76,6 @@ router.post('/register', async (req, res) => {
 				password: hashedPassword,
 			})
 			.returning({ id: User.id, name: User.username, email: User.email })
-
-		logger.info(data)
 
 		const tokenPayload = {
 			id: data[0].id,
@@ -132,5 +140,53 @@ router.post('/token/refresh', async (req, res) => {
 		return res.status(401).json({ message: 'Invalid refresh token!' })
 	}
 })
+
+// Update user profile
+router
+	.patch('/profile', upload.single('file'), async (req, res) => {
+		const jwt = req.user
+		const { username, email, password } = req.body
+		let profilePicture = null
+
+		if (req.file) profilePicture = req.file.buffer
+
+		try {
+			const user = await db.select().from(User).where(eq(User.id, jwt.id))
+			if (user.length < 1) return res.status(404).json({ message: 'User not found!' })
+
+			await db.update(User).set({ username, email, profilePicture }).where(eq(User.id, jwt.id))
+
+			if (password) {
+				const hashedPassword = await Bcrypt.hash(password, 10)
+				await db.update(User).set({ password: hashedPassword }).where(eq(User.id, jwt.id))
+			}
+
+			logger.info(profilePicture)
+
+			if (profilePicture) {
+				const sharp = Sharp(profilePicture)
+				sharp.resize(512, 512).jpeg({ quality: 80 })
+				profilePicture = await sharp.toBuffer()
+				await db.update(User).set({ profilePicture }).where(eq(User.id, jwt.id))
+			}
+
+			return res.status(200).json({ message: 'Profile updated successfully!' })
+		} catch (error) {
+			logger.error(error)
+			return res.status(500).json({ message: 'Internal Server Error' })
+		}
+	})
+	.use(jwtAuth)
+
+router
+	.get('/:userId/profile_picture', async (req, res) => {
+		const { userId } = req.params
+		const user = await db.select().from(User).where(eq(User.id, userId))
+		if (user.length < 1) return res.status(404).json({ message: 'User not found!' })
+		if (!user[0].profilePicture) return res.status(404).json({ message: 'Profile picture not found!' })
+
+		return res.setHeader('Content-Type', 'image/jpeg').send(user[0].profilePicture)
+	})
+	.use(jwtAuth)
 
 export default router
