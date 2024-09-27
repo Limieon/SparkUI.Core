@@ -5,9 +5,30 @@ import FS from 'fs'
 import Path from 'path'
 
 import JWT from 'jsonwebtoken'
+import Chalk, { type ChalkInstance } from 'chalk'
 
 const app = Express()
 app.use(Express.json())
+
+const methodColors: { [key: string]: ChalkInstance } = {
+	GET: Chalk.magenta,
+	POST: Chalk.green,
+	PUT: Chalk.yellow,
+	DELETE: Chalk.red,
+	PATCH: Chalk.yellowBright,
+	OPTIONS: Chalk.blue,
+	HEAD: Chalk.blueBright,
+}
+
+if (SPARKUI_CORE_DEBUG) {
+	logger.debug('Enabling request logging')
+
+	app.use((req, res, next) => {
+		const color = methodColors[req.method] || Chalk.white
+		logger.debug(`${color(req.method)}${' '.repeat(8 - req.method.length)} ${req.url}`)
+		next()
+	})
+}
 
 const devUser = {
 	id: '00000000-0000-0000-0000-000000000000',
@@ -38,7 +59,8 @@ export function initRoutes(dir: string) {
 	for (let f of FS.readdirSync(dir)) {
 		const path = Path.join(dir, f)
 		if (FS.statSync(path).isDirectory()) {
-			return initRoutes(path)
+			initRoutes(path)
+			continue
 		}
 
 		const router: Router = require(path).default

@@ -63,14 +63,27 @@ export const Image = pgTable('Image', {
 	createdAt,
 	data: bytea('data'),
 	file: varchar('file', { length: 256 }),
+	blurHash: varchar('blur_hash', { length: 128 }),
 
-	creatorId: uuid('creator_id').references(() => User.id),
+	creatorId: uuid('creator_id')
+		.references(() => User.id)
+		.notNull(),
+	baseItemId: uuid('base_item_id').references(() => SDBaseItem.id),
 })
 export const ImageRelations = relations(Image, ({ one, many }) => ({
 	creator: one(User, {
 		fields: [Image.creatorId],
 		references: [User.id],
 	}),
+	baseItem: one(SDBaseItem, {
+		fields: [Image.baseItemId],
+		references: [SDBaseItem.id],
+	}),
+	generationBatchItem: one(SDGenerationBatchItem, {
+		fields: [Image.id],
+		references: [SDGenerationBatchItem.imageId],
+	}),
+
 	datasetItems: many(SDDatasetItem),
 	tags: many(JTagImage),
 }))
@@ -79,7 +92,9 @@ export const Tag = pgTable('Tag', {
 	name: varchar('name', { length: 64 }).primaryKey(),
 	color: int32('color').default(0),
 
-	creatorId: uuid('creator_id').references(() => User.id),
+	creatorId: uuid('creator_id')
+		.references(() => User.id)
+		.notNull(),
 
 	createdAt,
 })
@@ -160,7 +175,9 @@ export const SDContainer = pgTable('SDContainer', {
 	description: text('description'),
 	brief: varchar('brief', { length: 256 }),
 
-	creatorId: uuid('creator_id').references(() => User.id),
+	creatorId: uuid('creator_id')
+		.references(() => User.id)
+		.notNull(),
 
 	createdAt,
 	updatedAt,
@@ -189,7 +206,9 @@ export const SDBaseItem = pgTable('SDBaseItem', {
 
 	// Foreign keys
 	containerId: uuid('container_id').references(() => SDContainer.id),
-	creatorId: uuid('creator_id').references(() => User.id),
+	creatorId: uuid('creator_id')
+		.references(() => User.id)
+		.notNull(),
 
 	createdAt,
 	updatedAt,
@@ -210,6 +229,7 @@ export const SDBaseItemRelations = relations(SDBaseItem, ({ one, many }) => ({
 	trainingInfo_merged_out: many(SDTrainingInfo_Merged, { relationName: 'outputItem' }),
 	trainingInfo_merged_in: many(SDTrainingInfo_Merged, { relationName: 'inputItem' }),
 	trainingInfo_trained: many(SDTrainingInfo_Trained),
+	previewImages: many(Image),
 }))
 
 export const SDTrainingInfo_Trained = pgTable('SDTrainingInfo_Trained', {
@@ -373,7 +393,9 @@ export const SDGenerationBatch = pgTable('SDGenerationBatch', {
 	// Foreign keys
 	usedCheckpointId: uuid('used_checkpoint_id').references(() => SDCheckpointItem.id),
 	usedRefinerId: uuid('used_refiner_id').references(() => SDCheckpointItem.id),
-	creatorId: uuid('creator_id').references(() => User.id),
+	creatorId: uuid('creator_id')
+		.references(() => User.id)
+		.notNull(),
 
 	createdAt,
 	updatedAt,
@@ -453,7 +475,9 @@ export const SDDataset = pgTable('SDDataset', {
 	description: text('description'),
 	brief: varchar('brief', { length: 256 }),
 
-	creatorId: uuid('creator_id').references(() => User.id),
+	creatorId: uuid('creator_id')
+		.references(() => User.id)
+		.notNull(),
 
 	createdAt,
 	updatedAt,

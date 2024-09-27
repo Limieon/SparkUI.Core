@@ -164,10 +164,8 @@ router
 			logger.info(profilePicture)
 
 			if (profilePicture) {
-				const sharp = Sharp(profilePicture)
-				sharp.resize(512, 512).jpeg({ quality: 80 })
-				profilePicture = await sharp.toBuffer()
-				await db.update(User).set({ profilePicture }).where(eq(User.id, jwt.id))
+				const buffer = await Sharp(profilePicture).resize(512, 512).webp().toBuffer()
+				await db.update(User).set({ profilePicture: buffer }).where(eq(User.id, jwt.id))
 			}
 
 			return res.status(200).json({ message: 'Profile updated successfully!' })
@@ -199,7 +197,7 @@ router
 		if (user.length < 1) return res.status(404).json({ message: 'User not found!' })
 		if (!user[0].profilePicture) return res.status(404).json({ message: 'Profile picture not found!' })
 
-		return res.setHeader('Content-Type', 'image/jpeg').send(user[0].profilePicture)
+		return res.setHeader('Content-Type', 'image/webp').send(user[0].profilePicture)
 	})
 	.use(jwtAuth)
 
