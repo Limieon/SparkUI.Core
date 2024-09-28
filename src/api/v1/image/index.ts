@@ -4,6 +4,8 @@ import { db } from '../../../db/DB'
 
 import FS from 'fs'
 import Sharp from 'sharp'
+import { Image } from '../../../db/Schema'
+import { eq } from 'drizzle-orm'
 
 export function appendImageURL(image: any) {
 	if (!image) return image
@@ -42,6 +44,23 @@ router.get('/:imageId/full', async (req, res) => {
 	if (contentType === 'image/gif') return res.setHeader('Content-Type', 'image/gif').send(await sharpInstance.gif().toBuffer())
 
 	return res.status(400).json({ message: `Bad Request, Invalid Content-Type ${contentType}` })
+})
+
+router.delete('/:imageId', async (req, res) => {
+	const imageId = req.params.imageId
+	const jwt = req.user
+
+	if (!imageId) return res.status(400).json({ message: 'Bad Request' })
+
+	const image = await db.query.Image.findFirst({
+		where: (i, { eq }) => eq(i.id, imageId),
+	})
+	if (image?.creatorId !== jwt.id) return res.status(403).json({ message: 'Forbidden' })
+	if (!image) return res.status(404).json({ message: 'Image Not Found' })
+
+	await db.delete(Image).where(eq(Image.id, imageId))
+
+	return res.status(200).json({ message: 'Image Deleted' })
 })
 
 export default router

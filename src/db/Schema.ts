@@ -66,9 +66,9 @@ export const Image = pgTable('Image', {
 	blurHash: varchar('blur_hash', { length: 128 }),
 
 	creatorId: uuid('creator_id')
-		.references(() => User.id)
+		.references(() => User.id, { onDelete: 'set null' })
 		.notNull(),
-	baseItemId: uuid('base_item_id').references(() => SDBaseItem.id),
+	baseItemId: uuid('base_item_id').references(() => SDBaseItem.id, { onDelete: 'set null' }),
 })
 export const ImageRelations = relations(Image, ({ one, many }) => ({
 	creator: one(User, {

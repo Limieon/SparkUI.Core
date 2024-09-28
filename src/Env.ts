@@ -9,6 +9,8 @@ export const {
 	SPARKUI_CORE_JWT_EXPIRES = '15m',
 	SPARKUI_CORE_JWT_REFRESH_SECRET = 'REFRESH_SECRET',
 	SPARKUI_CORE_JWT_REFRESH_EXPIRES = '7d',
+	SPARKUI_CORE_CIVITAI_KEY = 'civitai_key',
+	SPARKUI_CORE_CIVITAI_BASE = 'https://civitai.com/api/',
 } = process.env
 
 export const SPARKUI_CORE_PORT = Number(process.env.SPARKUI_CORE_PORT ?? '1911')

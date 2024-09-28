@@ -25,7 +25,7 @@ if (SPARKUI_CORE_DEBUG) {
 
 	app.use((req, res, next) => {
 		const color = methodColors[req.method] || Chalk.white
-		logger.debug(`${color(req.method)}${' '.repeat(8 - req.method.length)} ${req.url}`)
+		logger.debug(`${color(req.method)}${' '.repeat(7 - req.method.length)} ${req.url}`)
 		next()
 	})
 }
