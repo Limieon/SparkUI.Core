@@ -13,4 +13,9 @@ router.get('/status', async (req, res) => {
 	})
 })
 
+// May be used for some debugging purposes
+router.get('/debug', async (req, res) => {
+	return res.sendStatus(201)
+})
+
 export default router

@@ -27,7 +27,15 @@ const id = uuid('id').defaultRandom().primaryKey()
 const createdAt = timestamp('created_at').defaultNow()
 const updatedAt = timestamp('updated_at').defaultNow()
 
-export const ESDItemType = pgEnum('ESDItemType', ['Checkpoint', 'Lora', 'Embedding', 'ControlNet', 'ControlNetPreProcessor', 'Other'])
+export const ESDItemType = pgEnum('ESDItemType', [
+	'Checkpoint',
+	'Lora',
+	'Embedding',
+	'ControlNet',
+	'ControlNetPreProcessor',
+	'VAE',
+	'Other',
+])
 export const EModelFileFormat = pgEnum('EFileFormat', ['SafeTensors', 'PickleTensor', 'ONNX', 'Other'])
 export const EModelPrecision = pgEnum('EPrecision', ['FP32', 'FP16', 'BF16'])
 export const EModelSizeType = pgEnum('ESizeType', ['Pruned', 'Full', 'Unknown'])
@@ -57,6 +65,7 @@ export const EControlNetType = pgEnum('EControlNetType', [
 export const EControlNetMode = pgEnum('EControlNetMode', ['Balanced', 'Prompt', 'ControlNet'])
 export const EControlNetResizeMode = pgEnum('EControlNetResizeMode', ['Resize', 'CropAndResize', 'ResizeAndFill'])
 export const ESDTrainingType = pgEnum('ESDTrainingType', ['CheckpointTrained', 'CheckpointMered', 'Unknown'])
+export const EDownloadStatus = pgEnum('EDownloadStatus', ['Pending', 'Downloading', 'Done', 'Failed'])
 
 export const Image = pgTable('Image', {
 	id,
@@ -134,6 +143,7 @@ export const UserRelations = relations(User, ({ one, many }) => ({
 	containers: many(SDContainer),
 	sdBaseItems: many(SDBaseItem),
 	modelFiles: many(SDModelFile),
+	downloadQueueItems: many(SDDownloadQueueItem),
 }))
 
 export const UserRole = pgTable('UserRole', {
@@ -167,6 +177,32 @@ export const SDNode = pgTable('SDNode', {
 	totalRam: int32('total_ram'),
 	cacheSize: int32('cache_size'),
 })
+
+// Misc data that are not directly related stable diffusion but are used by the service
+export const SDDownloadQueueItem = pgTable('SDDownloadQueueItem', {
+	id,
+
+	modelName: varchar('model_name', { length: 256 }).notNull(),
+	downloadURL: varchar('download_url', { length: 256 }).notNull(),
+	path: varchar('path', { length: 256 }).notNull(),
+	progress: float64('progress').notNull().default(0),
+	sizeMB: float64('size_mb').notNull(),
+	thumbnail: bytea('thumbnail').notNull(),
+	thumbnailHash: varchar('thumbnail_hash', { length: 128 }).notNull(),
+
+	status: EDownloadStatus('status').notNull().default('Pending'),
+
+	remoteID: varchar('remote_id', { length: 256 }).notNull(),
+	creatorID: uuid('creator_id')
+		.references(() => User.id)
+		.notNull(),
+})
+export const SDDownloadQueueRelations = relations(SDDownloadQueueItem, ({ one }) => ({
+	creator: one(User, {
+		fields: [SDDownloadQueueItem.creatorID],
+		references: [User.id],
+	}),
+}))
 
 export const SDContainer = pgTable('SDContainer', {
 	id,

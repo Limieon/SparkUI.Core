@@ -5,6 +5,7 @@ import { eq, or } from 'drizzle-orm'
 import { SPARKUI_CORE_BASE_URL, SPARKUI_CORE_CIVITAI_BASE, SPARKUI_CORE_DEBUG } from '../../../../Env'
 import { type JWTPayload } from '../../user/index.ts'
 import * as BlurHash from 'blurhash'
+import Express from 'express'
 
 import Sharp from 'sharp'
 import Multer from 'multer'
@@ -16,6 +17,7 @@ import { appendImageURL } from '../../image/index.ts'
 import * as SD from '../../../../types/StableDiffusion.ts'
 
 import Axios from 'axios'
+import { downloadQueue, queueCivitAIModel } from '../../../../service/DownloadQueue.ts'
 
 interface QueryParams {
 	query?: string
@@ -72,6 +74,54 @@ router.get('/', async (req, res) => {
 		logger.error(e)
 		return res.status(500).json({ error: 'Internal Server Error' })
 	}
+})
+
+router.post('/queue/url', async (req, res) => {
+	const jwt = req.user
+
+	if (typeof req.body === 'string') req.body = [req.body]
+
+	const items: any[] = []
+	for (let url of req.body) {
+		if (!url) {
+			items.push([])
+			continue
+		}
+		const data = await queueCivitAIModel(jwt.id, url)
+		items.push(data)
+	}
+
+	return res.json({ data: { queueLength: downloadQueue.length } })
+})
+
+router.get('/queue', async (req, res) => {
+	const data: any[] = []
+	const jwt = req.user
+
+	for (let i of downloadQueue) {
+		if (i.creatorID !== jwt.id) continue
+		data.push({
+			id: i.id,
+			name: i.modelName,
+			path: i.path.split('/').pop(),
+			status: i.status,
+			progress: i.progress,
+			sizeMB: i.sizeMB,
+			thumbnailHash: i.thumbnailHash,
+			downloadStarted: i.downloadStarted,
+		})
+	}
+
+	return res.json({ data })
+})
+
+router.get('/queue/:id/thumbnail', async (req, res) => {
+	const id = req.params.id
+	const item = downloadQueue.find((i) => i.id === id)
+	if (!item) return res.status(404).json({ error: 'Item not found' })
+
+	const image = await Sharp(item.thumbnail).toBuffer()
+	return res.setHeader('Content-Type', 'image/webp').send(image)
 })
 
 export default router

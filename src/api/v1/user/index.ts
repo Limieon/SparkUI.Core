@@ -57,14 +57,13 @@ if (SPARKUI_CORE_DEBUG) {
 
 router.post('/register', async (req, res) => {
 	const { email, username, password }: SPostRegister = req.body
+	if (!email || !username || !password) return res.status(400).json({ message: 'Bad Request' })
 
 	try {
-		const user = await db
-			.select()
-			.from(User)
-			.where(or(eq(User.email, email), eq(User.username, username)))
-
-		if (user.length > 0) return res.status(400).json({ message: 'Username or Email already taken!' })
+		const user = await db.query.User.findFirst({
+			where: (i, { eq }) => or(eq(i.email, email), eq(i.username, username)),
+		})
+		if (user) return res.status(400).json({ message: 'Username or Email already taken!' })
 
 		const hashedPassword = await Bcrypt.hash(password, 10)
 
@@ -85,6 +84,8 @@ router.post('/register', async (req, res) => {
 
 		const accessToken = signTokenForUser(tokenPayload, SPARKUI_CORE_JWT_SECRET, SPARKUI_CORE_JWT_EXPIRES)
 		const refreshToken = signTokenForUser(tokenPayload, SPARKUI_CORE_JWT_REFRESH_SECRET, SPARKUI_CORE_JWT_REFRESH_EXPIRES)
+
+		console.log('5')
 
 		await db.update(User).set({ refreshToken }).where(eq(User.id, data[0].id))
 
