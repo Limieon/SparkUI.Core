@@ -9,7 +9,7 @@ import * as Table from '$lib/server/db/schema';
 import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
-	if (event.locals.user) return redirect(302, '/auth');
+	if (event.locals.user) return redirect(302, '/app/home');
 
 	return {};
 };
@@ -44,7 +44,7 @@ export const actions: Actions = {
 		if (result == undefined) return fail(400, { message: 'Warum ist die Banane krumm?' });
 
 		setCookies(e, result.access, result.refresh);
-		redirect(302, '/auth');
+		redirect(302, '/app/home');
 	},
 
 	register: async (e) => {
@@ -62,7 +62,7 @@ export const actions: Actions = {
 		if (tokens == undefined) fail(400, { message: 'Invalid credentials' });
 		setCookies(e, tokens.access, tokens.refresh);
 
-		redirect(302, '/auth');
+		redirect(302, '/app/home');
 	}
 };
 
