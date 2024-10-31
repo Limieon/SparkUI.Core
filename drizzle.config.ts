@@ -1,11 +1,15 @@
 import { defineConfig } from 'drizzle-kit';
-if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is not set');
 
 export default defineConfig({
 	schema: './src/lib/server/db/schema.ts',
 
 	dbCredentials: {
-		url: process.env.DATABASE_URL
+		host: process.env.SPARKUI_CORE_DB_HOST!,
+		port: Number(process.env.SPARKUI_CORE_DB_PORT!),
+		user: process.env.SPARKUI_CORE_DB_USER!,
+		password: process.env.SPARKUI_CORE_DB_PASS!,
+		database: process.env.SPARKUI_CORE_DB_NAME!,
+		ssl: process.env.SPARKUI_CORE_DB_SSL === 'true'
 	},
 
 	verbose: true,

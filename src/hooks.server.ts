@@ -1,32 +1,50 @@
 import type { Handle } from '@sveltejs/kit';
 import { dev } from '$app/environment';
-import * as auth from '$lib/server/auth.js';
+import * as Auth from '$lib/server/auth.js';
 
-const handleAuth: Handle = async ({ event, resolve }) => {
-	const sessionId = event.cookies.get(auth.sessionCookieName);
-	if (!sessionId) {
-		event.locals.user = null;
-		event.locals.session = null;
-		return resolve(event);
-	}
+function setCookies(e, accessToken: string, refreshToken: string | null | undefined) {
+	e.cookies.set(Auth.accessCookieName, accessToken, {
+		path: '/',
+		sameSite: 'lax',
+		httpOnly: true,
+		secure: !dev
+	});
 
-	const { session, user } = await auth.validateSession(sessionId);
-	if (session) {
-		event.cookies.set(auth.sessionCookieName, session.id, {
+	if (refreshToken)
+		e.cookies.set(Auth.refreshCookieName, refreshToken!, {
 			path: '/',
 			sameSite: 'lax',
 			httpOnly: true,
-			expires: session.expiresAt,
 			secure: !dev
 		});
-	} else {
-		event.cookies.delete(auth.sessionCookieName, { path: '/' });
+}
+
+const handleAuth: Handle = async ({ event: e, resolve }) => {
+	let accessToken = e.cookies.get(Auth.accessCookieName);
+	const refreshToken = e.cookies.get(Auth.refreshCookieName);
+
+	if (accessToken == undefined) accessToken = 'INVALID_ACCESS_TOKEN';
+
+	let user = Auth.validate(accessToken);
+	if (user == undefined) {
+		if (!refreshToken) {
+			e.locals.user = null;
+			return resolve(e);
+		}
+
+		const res = await Auth.refreshAccessToken(refreshToken);
+		if (res == undefined) {
+			e.locals.user = null;
+			return resolve(e);
+		}
+
+		setCookies(e, res.tokens.access, res.tokens.refresh);
 	}
 
-	event.locals.user = user;
-	event.locals.session = session;
+	e.locals.user = user;
+	e.locals.session = accessToken;
 
-	return resolve(event);
+	return resolve(e);
 };
 
 export const handle: Handle = handleAuth;
