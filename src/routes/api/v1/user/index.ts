@@ -21,8 +21,15 @@ router.get('/avatar', async (req: Request, res: Response) => {
 		return
 	}
 
+	let userID = req.user.sub
+
+	if (req.query.userid) {
+		userID = req.query.userid as string
+	}
+
+	Logger.info(userID)
 	res.setHeader('Content-Type', 'image/webp')
-	res.send((await db.select({ avatar: User.avatar }).from(User).where(eq(User.id, req.user.sub)))[0].avatar)
+	res.send((await db.select({ avatar: User.avatar }).from(User).where(eq(User.id, userID)))[0].avatar)
 })
 router.patch('/update', upload.single('avatar'), async (req: Request, res: Response) => {
 	if (!req.user) {
