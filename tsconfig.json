@@ -1,20 +1,21 @@
 {
-    "compilerOptions": {
-        "strict": true,
-        "jsx": "react-jsx",
-        "jsxImportSource": "hono/jsx",
-        "allowJs": true,
-        "checkJs": true,
-        "esModuleInterop": true,
-        "forceConsistentCasingInFileNames": true,
-        "resolveJsonModule": true,
-        "skipLibCheck": true,
-        "sourceMap": true,
-        "paths": {
-            "$/*": ["./src/*"],
-            "@env": ["./src/Env.ts"],
-            "@db": ["./src/db/index.ts"],
-            "@db/schema": ["./src/db/Schema.ts"]
-        }
-    }
+	"compilerOptions": {
+		"strict": true,
+		"jsx": "react-jsx",
+		"jsxImportSource": "hono/jsx",
+		"allowJs": true,
+		"checkJs": true,
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"resolveJsonModule": true,
+		"skipLibCheck": true,
+		"sourceMap": true,
+		"paths": {
+			"$/*": ["./src/*"],
+			"@env": ["./src/Env.ts"],
+			"@log": ["./src/service/Logger.ts"],
+			"@db": ["./src/db/index.ts"],
+			"@db/schema": ["./src/db/Schema.ts"]
+		}
+	}
 }

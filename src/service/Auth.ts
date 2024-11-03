@@ -49,7 +49,7 @@ function decodeRefreshPayload(token: string) {
 	return JWT.decode(token) as JWTRPayload
 }
 
-function hashPassword(password: string) {
+export function hashPassword(password: string) {
 	return bcrypt.hash(password, 10)
 }
 
@@ -92,15 +92,13 @@ async function getTokenCookies(req: Request): Promise<{ access?: string; refresh
 }
 
 export const authMiddleware: RequestHandler = async (req: Request, res: Response, next: NextFunction) => {
-	console.log('Auth Middleware')
 	let { access, refresh } = await getTokenCookies(req)
 	let userPayload: JWTPayload | null = null
-
-	console.log({ access, refresh })
 
 	if (access) {
 		try {
 			userPayload = authenticate(access)
+			req.user = userPayload
 
 			next()
 			return
@@ -110,6 +108,7 @@ export const authMiddleware: RequestHandler = async (req: Request, res: Response
 					const tokens = await refreshTokens(refresh)
 					await setTokenCookies(res, tokens)
 					userPayload = authenticate(tokens.access)
+					req.user = userPayload
 
 					next()
 					return
