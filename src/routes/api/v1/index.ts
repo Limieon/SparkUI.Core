@@ -1,8 +1,11 @@
-import { Hono } from 'hono'
+import { authMiddleware } from '$/service/Auth'
+import { Router, Request, Response } from 'express'
 
-const router = new Hono()
-router.get('/status', (c) => {
-    return c.text('Success!')
+const router = Router()
+router.use(authMiddleware)
+
+router.get('/status', async (req: Request, res: Response) => {
+	res.send('Success!')
 })
 
 export default router
