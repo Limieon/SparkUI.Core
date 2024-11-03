@@ -4,6 +4,7 @@ import * as Auth from '$/service/Auth'
 
 import z from 'zod'
 import { Router, Request, Response } from 'express'
+import Logger from '@log'
 
 const router = Router()
 router.post('/register', async (req: Request, res: Response) => {
@@ -27,7 +28,7 @@ router.post('/register', async (req: Request, res: Response) => {
 		if (e instanceof Error) {
 			res.status(500).json({ error: e.message })
 		}
-		console.log(e)
+		Logger.error(e)
 	}
 })
 router.post('/login', async (req: Request, res: Response) => {
@@ -50,7 +51,7 @@ router.post('/login', async (req: Request, res: Response) => {
 		if (e instanceof Error) {
 			res.status(500).json({ error: e.message })
 		}
-		console.log(e)
+		Logger.error(e)
 	}
 })
 

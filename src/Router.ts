@@ -1,14 +1,33 @@
 import FS from 'fs'
 import Path from 'path'
-import Express, { Router, type NextFunction, type Request, type Response } from 'express'
+import Express, { RequestHandler, Router, type NextFunction, type Request, type Response } from 'express'
 import cookieParser from 'cookie-parser'
 import * as Env from '@env'
+import Chalk from 'chalk'
 
 import Logger from '@log'
 
 const router = Express()
 router.use(cookieParser(Env.SPARKUI_CORE_COOKIE_SECRET))
 router.use(Express.json())
+
+const methodColors: { [key: string]: ChalkInstance } = {
+	GET: Chalk.magenta,
+	POST: Chalk.green,
+	PUT: Chalk.yellow,
+	DELETE: Chalk.red,
+	PATCH: Chalk.yellowBright,
+	OPTIONS: Chalk.blue,
+	HEAD: Chalk.blueBright,
+}
+
+const routeLogger: RequestHandler = async (req: Request, res: Response, next: NextFunction) => {
+	const color = methodColors[req.method] || Chalk.white
+	Logger.debug(`${color(req.method)}${' '.repeat(7 - req.method.length)} ${req.url}`)
+	next()
+}
+
+if (Env.SPARKUI_CORE_DEBUG) router.use(routeLogger)
 
 export async function initRoutes(dir: string, prefix: string) {
 	async function initSubRoutes(path: string) {

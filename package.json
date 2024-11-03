@@ -6,6 +6,7 @@
 	},
 	"dependencies": {
 		"bcrypt": "^5.1.1",
+		"chalk": "^5.3.0",
 		"cookie-parser": "^1.4.7",
 		"drizzle-kit": "^0.27.0",
 		"drizzle-orm": "^0.36.0",
@@ -23,6 +24,7 @@
 	"devDependencies": {
 		"@types/bcrypt": "^5.0.2",
 		"@types/bun": "latest",
+		"@types/chalk": "^2.2.4",
 		"@types/cookie-parser": "^1.4.7",
 		"@types/express": "^5.0.0",
 		"@types/jsonwebtoken": "^9.0.7",

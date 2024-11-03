@@ -8,6 +8,7 @@ import { hashPassword } from '$/service/Auth'
 import db from '$/db'
 import { User } from '$/db/Schema'
 import { eq } from 'drizzle-orm'
+import Logger from '@log'
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } })
 
@@ -39,7 +40,7 @@ router.patch('/update', upload.single('avatar'), async (req: Request, res: Respo
 		const body = querySchema.parse(req.body)
 		const file = req.file
 
-		let avatarBuffer: Buffer | null = null
+		let avatarBuffer: Buffer | undefined = undefined
 		if (file) {
 			avatarBuffer = await Sharp(file.buffer).resize(768, 768).webp({ quality: 90 }).toBuffer()
 		}
