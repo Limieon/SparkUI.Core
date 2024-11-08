@@ -1,5 +1,3 @@
-import { Hono } from 'hono'
-import { Router } from 'hono/router'
 import * as Env from '@env'
 import { initRoutes } from './Router'
 import Path from 'path'

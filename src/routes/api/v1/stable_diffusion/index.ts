@@ -9,9 +9,10 @@ import * as Table from '@db/schema'
 
 import FS from 'fs'
 
-import z from 'zod'
+import z, { ZodError } from 'zod'
 import { aliasedTable, DrizzleError, eq } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
+import Logger from '@log'
 
 export const ContainerSchema = z.object({
     id: z.string().uuid(),
@@ -180,8 +181,6 @@ router.get(
         type QueryType = z.infer<typeof QueryParams>
         const query: QueryType = QueryParams.parse(req.params)
 
-        console.log(query)
-
         try {
             res.setHeader('Content-Type', 'image/webp')
             res.send(
@@ -207,7 +206,77 @@ router.get(
 
 // Get specific model
 router.get('/models/:mID', async (req: Request, res: Response) => {
+    const QueryParams = z.object({
+        mID: z.string().uuid(),
+    })
+    type QueryType = z.infer<typeof QueryParams>
+    const query: QueryType = QueryParams.parse(req.params)
     const user = req.user
+
+    const ResSchema = z.object({
+        id: z.string().uuid(),
+        type: z.enum(Table.SDBaseItem.type.enumValues),
+        description: z.string(),
+        brief: z.string(),
+        version: z.string(),
+        usedInBatches: z.number().int(),
+        usedInImages: z.number().int(),
+        nsfw: z.boolean(),
+        nsfwLevel: z.number().int(),
+        trainingType: z.enum(Table.SDBaseItem.trainingType.enumValues),
+
+        createdAt: z.date(),
+        updatedAt: z.date(),
+        lastUsedAt: z.date().nullable(),
+
+        container: z.object({
+            id: z.string().uuid(),
+            name: z.string(),
+            description: z.string(),
+            brief: z.string(),
+        }),
+        creator: z.object({
+            id: z.string().uuid(),
+            name: z.string(),
+        }),
+    })
+
+    try {
+        const items = await db
+            .select()
+            .from(Table.SDBaseItem)
+            .innerJoin(
+                Table.SDContainer,
+                eq(Table.SDContainer.id, Table.SDBaseItem.containerId)
+            )
+            .innerJoin(
+                Table.User,
+                eq(Table.User.id, Table.SDBaseItem.creatorId)
+            )
+            .where(eq(Table.SDBaseItem.id, query.mID))
+            .limit(1)
+
+        if (items.length < 1) {
+            res.status(404).json({ error: 'No model found!' })
+            return
+        }
+
+        const item = items[0]
+        const data = ResSchema.parse({
+            ...item.SDBaseItem,
+            container: item.SDContainer,
+            creator: item.User,
+        })
+
+        res.json({ data: ResSchema.parse(data), metadata: {} })
+    } catch (e) {
+        if (e instanceof ZodError) {
+            res.status(500).send({ error: JSON.parse(e.message) })
+        } else if (e instanceof Error) {
+            res.status(500).send({ error: e.message })
+        }
+        Logger.error(e)
+    }
 })
 
 // ---> Create Endpoints <--- //
