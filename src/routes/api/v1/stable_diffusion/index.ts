@@ -1,8 +1,8 @@
 import { authMiddleware } from '$/service/Auth'
 import e, { Router, Request, Response } from 'express'
 
-import { UserSchema } from '$/routes/api/v1/user'
-import { ImageSchema, ImageType } from '$/routes/api/v1/image'
+import { RefUserSchema, UserSchema } from '$/routes/api/v1/user'
+import { ImageSchema, ImageType, RefImageSceham } from '$/routes/api/v1/image'
 
 import db from '@db'
 import * as Table from '@db/schema'
@@ -14,6 +14,20 @@ import { aliasedTable, DrizzleError, eq } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 import Logger from '@log'
 
+export const RefItemSchema = z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    description: z.string(),
+    brief: z.string(),
+})
+export type RefItemType = z.infer<typeof RefItemSchema>
+export const RefContainerSchema = z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string(),
+})
+export type RefContainerType = z.infer<typeof RefContainerSchema>
+
 export const ContainerSchema = z.object({
     id: z.string().uuid(),
 
@@ -21,18 +35,26 @@ export const ContainerSchema = z.object({
     description: z.string(),
     brief: z.string(),
 
-    creator: UserSchema,
+    creator: RefUserSchema,
+    items: z.array(RefItemSchema),
+
+    createdAt: z.date(),
+    updatedAt: z.date(),
 })
 export type ContainerType = z.infer<typeof ContainerSchema>
-const ContaienrUpdateSchema = ContainerSchema.omit({
+export const UpdateContainerSchema = ContainerSchema.omit({
     id: true,
+    items: true,
     creator: true,
+    createdAt: true,
+    updatedAt: true,
 })
+export type UpdateContainerType = z.infer<typeof UpdateContainerSchema>
 
 export const ItemSchema = z.object({
     id: z.string().uuid(),
 
-    type: z.enum(Table.ESDItemType.enumValues),
+    type: z.enum(Table.SDBaseItem.type.enumValues),
     name: z.string(),
     description: z.string(),
     brief: z.string(),
@@ -41,27 +63,25 @@ export const ItemSchema = z.object({
     usedInImages: z.number().int(),
     nsfw: z.boolean(),
     nsfwLevel: z.number().int(),
-    trainingType: z.enum(Table.ESDTrainingType.enumValues),
+    trainingType: z.enum(Table.SDBaseItem.trainingType.enumValues),
 
-    creator: UserSchema,
-    container: ContainerSchema.optional(),
+    container: RefContainerSchema,
+    creator: RefUserSchema,
+    images: z.array(RefImageSceham),
+
+    createdAt: z.date(),
+    updatedAt: z.date(),
+    lastUsedAt: z.date().nullable(),
 })
 export type ItemType = z.infer<typeof ItemSchema>
-
-const ItemUpdateSchema = ItemSchema.omit({
+export const UpdateItemSchema = ItemSchema.omit({
     id: true,
-    usedInBatches: true,
-    usedInImages: true,
-    container: true,
+    images: true,
     creator: true,
+    createdAt: true,
+    updatedAt: true,
 })
-
-export const ContainerESchema = ContainerSchema.merge(
-    z.object({
-        items: z.array(ItemSchema),
-    })
-)
-export type ContainerEType = z.infer<typeof ContainerESchema>
+export type UpdateItemType = z.infer<typeof UpdateItemSchema>
 
 const router = Router()
 router.use(authMiddleware)
@@ -77,18 +97,38 @@ router.get('/models', async (req: Request, res: Response) => {
     type QueryType = z.infer<typeof QueryParams>
     const query: QueryType = QueryParams.parse(req.params)
 
-    const data: ItemType[] = []
-    for (let d of await db
+    const entries = await db
         .select()
         .from(Table.SDBaseItem)
-        .innerJoin(Table.User, eq(Table.User.id, Table.SDBaseItem.creatorId))) {
-        data.push(
-            ItemSchema.parse({
-                ...d.SDBaseItem,
-                creator: { id: d.User?.id, name: d.User.name },
-            })
+        .innerJoin(Table.User, eq(Table.User.id, Table.SDBaseItem.creatorId))
+        .innerJoin(
+            Table.SDContainer,
+            eq(Table.SDContainer.id, Table.SDBaseItem.containerId)
         )
+        .innerJoin(Table.Image, eq(Table.Image.baseItemId, Table.SDBaseItem.id))
+
+    const data: ItemType[] = []
+    let lastID: string | null = null
+    for (let e of entries) {
+        const { id } = e.SDBaseItem
+        if (lastID !== id) {
+            data.push(
+                ItemSchema.parse({
+                    ...e.SDBaseItem,
+                    creator: e.User,
+                    container: e.SDContainer,
+                    images: [],
+                })
+            )
+
+            lastID = id
+        }
+
+        data[data.length - 1].images.push(RefImageSceham.parse(e.Image))
     }
+
+    FS.writeFileSync('./test/data.json', JSON.stringify(entries, null, 4))
+
     res.json({ data, meta: {} })
 })
 
@@ -102,20 +142,30 @@ router.get('/containers', async (req: Request, res: Response) => {
     type QueryType = z.infer<typeof QueryParams>
     const query: QueryType = QueryParams.parse(req.params)
 
-    const data: ContainerType[] = []
-    for (let d of await db
+    const entries = await db
         .select()
         .from(Table.SDContainer)
+        .innerJoin(Table.User, eq(Table.User.id, Table.SDContainer.creatorId))
         .innerJoin(
-            Table.User,
-            eq(Table.User.id, Table.SDContainer.creatorId)
-        )) {
-        data.push(
-            ContainerSchema.parse({
-                ...d.SDContainer,
-                creator: { id: d.User.id, name: d.User.name },
-            })
+            Table.SDBaseItem,
+            eq(Table.SDBaseItem.containerId, Table.SDContainer.id)
         )
+
+    let lastID: string | null = null
+    const data: ContainerType[] = []
+    for (let e of entries) {
+        const { id } = e.SDContainer
+        if (lastID !== id) {
+            data.push(
+                ContainerSchema.parse({
+                    ...e.SDContainer,
+                    creator: e.User,
+                    items: [],
+                })
+            )
+            lastID = id
+        }
+        data[data.length - 1].items.push(RefItemSchema.parse(e.SDBaseItem))
     }
 
     res.json({ data, meta: {} })
@@ -131,7 +181,7 @@ router.get('/containers/:cID', async (req: Request, res: Response) => {
     type QueryType = z.infer<typeof QueryParams>
     const query: QueryType = QueryParams.parse(req.params)
 
-    const queryRes = await db
+    const entries = await db
         .select()
         .from(Table.SDContainer)
         .innerJoin(
@@ -140,32 +190,17 @@ router.get('/containers/:cID', async (req: Request, res: Response) => {
         )
         .innerJoin(Table.User, eq(Table.SDContainer.creatorId, Table.User.id))
         .where(eq(Table.SDContainer.id, query.cID))
-        .limit(1)
 
-    const items: ItemType[] = []
-    for (let d of queryRes) {
-        items.push(
-            ItemSchema.parse({
-                ...d.SDBaseItem,
-                creator: (
-                    await db
-                        .select()
-                        .from(Table.User)
-                        .where(eq(Table.User.id, d.SDBaseItem.creatorId))
-                        .limit(1)
-                )[0],
-            })
-        )
-    }
+    FS.writeFileSync('test/data.json', JSON.stringify(entries, null, 4))
 
-    const data: ContainerEType = ContainerESchema.parse({
-        items,
-        creator: {
-            id: queryRes[0].User.id,
-            name: queryRes[0].User.name,
-        },
-        ...queryRes[0].SDContainer,
+    let data: ContainerType = ContainerSchema.parse({
+        ...entries[0].SDContainer,
+        creator: entries[0].User,
+        items: [],
     })
+    for (let e of entries) {
+        data.items.push(RefItemSchema.parse(e.SDBaseItem))
+    }
 
     res.json({ data, meta: {} })
 })
@@ -213,70 +248,29 @@ router.get('/models/:mID', async (req: Request, res: Response) => {
     const query: QueryType = QueryParams.parse(req.params)
     const user = req.user
 
-    const ResSchema = z.object({
-        id: z.string().uuid(),
-        type: z.enum(Table.SDBaseItem.type.enumValues),
-        description: z.string(),
-        brief: z.string(),
-        version: z.string(),
-        usedInBatches: z.number().int(),
-        usedInImages: z.number().int(),
-        nsfw: z.boolean(),
-        nsfwLevel: z.number().int(),
-        trainingType: z.enum(Table.SDBaseItem.trainingType.enumValues),
+    const entries = await db
+        .select()
+        .from(Table.SDBaseItem)
+        .innerJoin(
+            Table.SDContainer,
+            eq(Table.SDContainer.id, Table.SDBaseItem.containerId)
+        )
+        .innerJoin(Table.Image, eq(Table.Image.baseItemId, Table.SDBaseItem.id))
+        .innerJoin(Table.User, eq(Table.User.id, Table.SDBaseItem.creatorId))
+        .where(eq(Table.SDBaseItem.id, query.mID))
 
-        createdAt: z.date(),
-        updatedAt: z.date(),
-        lastUsedAt: z.date().nullable(),
-
-        container: z.object({
-            id: z.string().uuid(),
-            name: z.string(),
-            description: z.string(),
-            brief: z.string(),
-        }),
-        creator: z.object({
-            id: z.string().uuid(),
-            name: z.string(),
-        }),
+    const data: ItemType = ItemSchema.parse({
+        ...entries[0].SDBaseItem,
+        creator: entries[0].User,
+        container: entries[0].SDContainer,
+        images: [],
     })
 
-    try {
-        const items = await db
-            .select()
-            .from(Table.SDBaseItem)
-            .innerJoin(
-                Table.SDContainer,
-                eq(Table.SDContainer.id, Table.SDBaseItem.containerId)
-            )
-            .innerJoin(
-                Table.User,
-                eq(Table.User.id, Table.SDBaseItem.creatorId)
-            )
-            .where(eq(Table.SDBaseItem.id, query.mID))
-            .limit(1)
-
-        if (items.length < 1) {
-            res.status(404).json({ error: 'No model found!' })
-            return
-        }
-
-        const item = items[0]
-        const data = ResSchema.parse({
-            ...item.SDBaseItem,
-            container: item.SDContainer,
-            creator: item.User,
-        })
-
-        res.json({ data: ResSchema.parse(data), metadata: {} })
-    } catch (e) {
-        if (e instanceof ZodError) {
-            res.status(500).send({ error: JSON.parse(e.message) })
-        } else if (e instanceof Error) {
-            res.status(500).send({ error: e.message })
-        }
-        Logger.error(e)
+    for (let e of entries) {
+        data.images.push(RefImageSceham.parse(e.Image))
     }
+
+    res.status(200).json({ data, meta: {} })
 })
 
 // ---> Create Endpoints <--- //

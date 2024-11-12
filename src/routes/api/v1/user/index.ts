@@ -15,6 +15,10 @@ export const UserSchema = z.object({
     id: z.string().uuid(),
     name: z.string(),
 })
+export const RefUserSchema = z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+})
 
 const upload = multer({
     storage: multer.memoryStorage(),

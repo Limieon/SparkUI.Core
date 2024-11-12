@@ -15,6 +15,10 @@ export const ImageSchema = z.object({
     blurHash: z.string(),
     createdAt: z.number(),
 })
+export const RefImageSceham = z.object({
+    id: z.string().uuid(),
+})
 export type ImageType = z.infer<typeof ImageSchema>
+export type RefImageType = z.infer<typeof RefImageSceham>
 
 export default router
