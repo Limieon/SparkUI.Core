@@ -1,3 +1,7 @@
+# VSCode
+.vscode/
+.VSCodeCounter/
+
 # deps
 node_modules/
 

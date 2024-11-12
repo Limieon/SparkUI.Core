@@ -11,7 +11,22 @@ import { encodeCursor, decodeCursor } from '@db/utils'
 import FS from 'fs'
 
 import z, { ZodError } from 'zod'
-import { aliasedTable, and, arrayOverlaps, asc, count, DrizzleError, eq, getTableColumns, gt, inArray, or, sql } from 'drizzle-orm'
+import {
+	aliasedTable,
+	and,
+	arrayOverlaps,
+	asc,
+	count,
+	desc,
+	DrizzleError,
+	eq,
+	getTableColumns,
+	gt,
+	inArray,
+	lte,
+	or,
+	sql,
+} from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 import Logger from '@log'
 
@@ -93,10 +108,10 @@ router.get('/models', async (req: Request, res: Response) => {
 	const QueryParams = z.object({
 		limit: z.coerce.number().int().max(50).default(20),
 		cursor: z.string().nullable().optional(),
-		nsfw: z.coerce.boolean().default(false),
+		nsfw: z.coerce.number().int().default(0),
 		types: z
 			.union([z.string(), z.array(z.enum(Table.ESDItemType.enumValues))])
-			.transform((v) => (typeof v === 'string' ? v.split(',') : v))
+			.transform((v) => (typeof v === 'string' ? (v as string).split(',') : v))
 			.default([]),
 	})
 	type QueryType = z.infer<typeof QueryParams>
@@ -111,7 +126,6 @@ router.get('/models', async (req: Request, res: Response) => {
 				db
 					.select()
 					.from(Table.SDBaseItem)
-					.limit(query.limit + 1)
 					.where(
 						cursor
 							? or(
@@ -120,11 +134,12 @@ router.get('/models', async (req: Request, res: Response) => {
 							  )
 							: undefined
 					)
+					.limit(query.limit + 1)
 					.as('SDBaseItem')
 			)
 			.where(
 				and(
-					query.nsfw ? undefined : eq(Table.SDBaseItem.nsfw, false),
+					lte(Table.SDBaseItem.nsfwLevel, query.nsfw ? query.nsfw : 0),
 					query.types.length > 0 ? inArray(Table.SDBaseItem.type, query.types) : undefined
 				)
 			)
@@ -157,16 +172,12 @@ router.get('/models', async (req: Request, res: Response) => {
 			if (e.Image == undefined) continue
 			data[data.length - 1].images.push(RefImageSceham.parse(e.Image))
 		}
-
-		FS.writeFileSync('./test/data.json', JSON.stringify(entries, null, 4))
+		const count = data.length
 
 		res.json({
 			data: data.slice(0, query.limit),
 			meta: {
-				nextCursor:
-					data.length > query.limit
-						? encodeCursor({ id: data[data.length - 1].id, createdAt: data[data.length - 1].createdAt })
-						: null,
+				nextCursor: count > query.limit ? encodeCursor({ id: data[count - 1].id, createdAt: data[count - 1].createdAt }) : null,
 			},
 		})
 	} catch (e) {
@@ -178,20 +189,44 @@ router.get('/models', async (req: Request, res: Response) => {
 // Query Contaienrs
 router.get('/containers', async (req: Request, res: Response) => {
 	const QueryParams = z.object({
-		limit: z.number().int().max(50).default(20),
-		nsfw: z.boolean().default(false),
-		type: z.array(z.enum(Table.ESDItemType.enumValues)).default([]),
+		limit: z.coerce.number().int().max(50).default(20),
+		cursor: z.string().nullable().optional(),
+		nsfw: z.coerce.number().int().default(0),
+		types: z
+			.union([z.string(), z.array(z.enum(Table.ESDItemType.enumValues))])
+			.transform((v) => (typeof v === 'string' ? (v as string).split(',') : v))
+			.default([]),
 	})
 	type QueryType = z.infer<typeof QueryParams>
-	const query: QueryType = QueryParams.parse(req.params)
+	const query: QueryType = QueryParams.parse(req.query)
+	const cursor = query.cursor ? decodeCursor(query.cursor) : null
 
 	try {
 		const entries = await db
 			.select()
-			.from(db.select().from(Table.SDContainer).as('SDContainer'))
+			.from(
+				db
+					.select()
+					.from(Table.SDContainer)
+					.where(
+						cursor
+							? or(
+									gt(Table.SDContainer.createdAt, cursor.createdAt),
+									and(eq(Table.SDContainer.createdAt, cursor.createdAt), gt(Table.SDContainer.id, cursor.id))
+							  )
+							: undefined
+					)
+					.limit(query.limit + 1)
+					.as('SDContainer')
+			)
 			.innerJoin(Table.User, eq(Table.User.id, Table.SDContainer.creatorId))
 			.leftJoin(Table.SDBaseItem, eq(Table.SDBaseItem.containerId, Table.SDContainer.id))
-			.orderBy(sql`${Table.SDBaseItem.createdAt} DESC`)
+			.where(
+				and(
+					lte(Table.SDBaseItem.nsfwLevel, query.nsfw ? query.nsfw : 0),
+					query.types.length > 0 ? inArray(Table.SDBaseItem.type, query.types) : undefined
+				)
+			)
 
 		if (entries.length < 1) {
 			res.status(404).json({ error: 'No matching items found' })
@@ -216,8 +251,14 @@ router.get('/containers', async (req: Request, res: Response) => {
 			if (e.SDBaseItem == undefined) continue
 			data[data.length - 1].items.push(RefItemSchema.parse(e.SDBaseItem))
 		}
+		const count = data.length
 
-		res.json({ data, meta: {} })
+		res.json({
+			data: data.slice(0, query.limit),
+			meta: {
+				nextCursor: count > query.limit ? encodeCursor({ id: data[count - 1].id, createdAt: data[count - 1].createdAt }) : null,
+			},
+		})
 	} catch (e) {
 		if (e instanceof Error) res.status(500).json({ error: e.message })
 		else Logger.error(e)
