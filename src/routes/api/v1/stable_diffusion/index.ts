@@ -97,39 +97,55 @@ router.get('/models', async (req: Request, res: Response) => {
     type QueryType = z.infer<typeof QueryParams>
     const query: QueryType = QueryParams.parse(req.params)
 
-    const entries = await db
-        .select()
-        .from(Table.SDBaseItem)
-        .innerJoin(Table.User, eq(Table.User.id, Table.SDBaseItem.creatorId))
-        .innerJoin(
-            Table.SDContainer,
-            eq(Table.SDContainer.id, Table.SDBaseItem.containerId)
-        )
-        .innerJoin(Table.Image, eq(Table.Image.baseItemId, Table.SDBaseItem.id))
-
-    const data: ItemType[] = []
-    let lastID: string | null = null
-    for (let e of entries) {
-        const { id } = e.SDBaseItem
-        if (lastID !== id) {
-            data.push(
-                ItemSchema.parse({
-                    ...e.SDBaseItem,
-                    creator: e.User,
-                    container: e.SDContainer,
-                    images: [],
-                })
+    try {
+        const entries = await db
+            .select()
+            .from(Table.SDBaseItem)
+            .innerJoin(
+                Table.User,
+                eq(Table.User.id, Table.SDBaseItem.creatorId)
+            )
+            .innerJoin(
+                Table.SDContainer,
+                eq(Table.SDContainer.id, Table.SDBaseItem.containerId)
+            )
+            .innerJoin(
+                Table.Image,
+                eq(Table.Image.baseItemId, Table.SDBaseItem.id)
             )
 
-            lastID = id
+        if (entries.length < 1) {
+            res.status(404).json({ error: 'No matching items found' })
+            return
         }
 
-        data[data.length - 1].images.push(RefImageSceham.parse(e.Image))
+        const data: ItemType[] = []
+        let lastID: string | null = null
+        for (let e of entries) {
+            const { id } = e.SDBaseItem
+            if (lastID !== id) {
+                data.push(
+                    ItemSchema.parse({
+                        ...e.SDBaseItem,
+                        creator: e.User,
+                        container: e.SDContainer,
+                        images: [],
+                    })
+                )
+
+                lastID = id
+            }
+
+            data[data.length - 1].images.push(RefImageSceham.parse(e.Image))
+        }
+
+        FS.writeFileSync('./test/data.json', JSON.stringify(entries, null, 4))
+
+        res.json({ data, meta: {} })
+    } catch (e) {
+        Logger.error(e)
+        res.status(500).json({ error: e.message })
     }
-
-    FS.writeFileSync('./test/data.json', JSON.stringify(entries, null, 4))
-
-    res.json({ data, meta: {} })
 })
 
 // Query Contaienrs
@@ -142,33 +158,46 @@ router.get('/containers', async (req: Request, res: Response) => {
     type QueryType = z.infer<typeof QueryParams>
     const query: QueryType = QueryParams.parse(req.params)
 
-    const entries = await db
-        .select()
-        .from(Table.SDContainer)
-        .innerJoin(Table.User, eq(Table.User.id, Table.SDContainer.creatorId))
-        .innerJoin(
-            Table.SDBaseItem,
-            eq(Table.SDBaseItem.containerId, Table.SDContainer.id)
-        )
-
-    let lastID: string | null = null
-    const data: ContainerType[] = []
-    for (let e of entries) {
-        const { id } = e.SDContainer
-        if (lastID !== id) {
-            data.push(
-                ContainerSchema.parse({
-                    ...e.SDContainer,
-                    creator: e.User,
-                    items: [],
-                })
+    try {
+        const entries = await db
+            .select()
+            .from(Table.SDContainer)
+            .innerJoin(
+                Table.User,
+                eq(Table.User.id, Table.SDContainer.creatorId)
             )
-            lastID = id
-        }
-        data[data.length - 1].items.push(RefItemSchema.parse(e.SDBaseItem))
-    }
+            .innerJoin(
+                Table.SDBaseItem,
+                eq(Table.SDBaseItem.containerId, Table.SDContainer.id)
+            )
 
-    res.json({ data, meta: {} })
+        if (entries.length < 1) {
+            res.status(404).json({ error: 'No matching items found' })
+            return
+        }
+
+        let lastID: string | null = null
+        const data: ContainerType[] = []
+        for (let e of entries) {
+            const { id } = e.SDContainer
+            if (lastID !== id) {
+                data.push(
+                    ContainerSchema.parse({
+                        ...e.SDContainer,
+                        creator: e.User,
+                        items: [],
+                    })
+                )
+                lastID = id
+            }
+            data[data.length - 1].items.push(RefItemSchema.parse(e.SDBaseItem))
+        }
+
+        res.json({ data, meta: {} })
+    } catch (e) {
+        Logger.error(e)
+        res.status(500).json({ error: e.message })
+    }
 })
 
 // Get specific container
@@ -181,28 +210,41 @@ router.get('/containers/:cID', async (req: Request, res: Response) => {
     type QueryType = z.infer<typeof QueryParams>
     const query: QueryType = QueryParams.parse(req.params)
 
-    const entries = await db
-        .select()
-        .from(Table.SDContainer)
-        .innerJoin(
-            Table.SDBaseItem,
-            eq(Table.SDContainer.id, Table.SDBaseItem.containerId)
-        )
-        .innerJoin(Table.User, eq(Table.SDContainer.creatorId, Table.User.id))
-        .where(eq(Table.SDContainer.id, query.cID))
+    try {
+        const entries = await db
+            .select()
+            .from(Table.SDContainer)
+            .innerJoin(
+                Table.SDBaseItem,
+                eq(Table.SDContainer.id, Table.SDBaseItem.containerId)
+            )
+            .innerJoin(
+                Table.User,
+                eq(Table.SDContainer.creatorId, Table.User.id)
+            )
+            .where(eq(Table.SDContainer.id, query.cID))
 
-    FS.writeFileSync('test/data.json', JSON.stringify(entries, null, 4))
+        if (entries.length < 1) {
+            res.status(404).json({ error: 'No matching items found' })
+            return
+        }
 
-    let data: ContainerType = ContainerSchema.parse({
-        ...entries[0].SDContainer,
-        creator: entries[0].User,
-        items: [],
-    })
-    for (let e of entries) {
-        data.items.push(RefItemSchema.parse(e.SDBaseItem))
+        FS.writeFileSync('test/data.json', JSON.stringify(entries, null, 4))
+
+        let data: ContainerType = ContainerSchema.parse({
+            ...entries[0].SDContainer,
+            creator: entries[0].User,
+            items: [],
+        })
+        for (let e of entries) {
+            data.items.push(RefItemSchema.parse(e.SDBaseItem))
+        }
+
+        res.json({ data, meta: {} })
+    } catch (e) {
+        Logger.error(e)
+        res.status(500).json({ error: e.message })
     }
-
-    res.json({ data, meta: {} })
 })
 
 // Get main prview image for container
@@ -248,29 +290,45 @@ router.get('/models/:mID', async (req: Request, res: Response) => {
     const query: QueryType = QueryParams.parse(req.params)
     const user = req.user
 
-    const entries = await db
-        .select()
-        .from(Table.SDBaseItem)
-        .innerJoin(
-            Table.SDContainer,
-            eq(Table.SDContainer.id, Table.SDBaseItem.containerId)
-        )
-        .innerJoin(Table.Image, eq(Table.Image.baseItemId, Table.SDBaseItem.id))
-        .innerJoin(Table.User, eq(Table.User.id, Table.SDBaseItem.creatorId))
-        .where(eq(Table.SDBaseItem.id, query.mID))
+    try {
+        const entries = await db
+            .select()
+            .from(Table.SDBaseItem)
+            .innerJoin(
+                Table.SDContainer,
+                eq(Table.SDContainer.id, Table.SDBaseItem.containerId)
+            )
+            .innerJoin(
+                Table.Image,
+                eq(Table.Image.baseItemId, Table.SDBaseItem.id)
+            )
+            .innerJoin(
+                Table.User,
+                eq(Table.User.id, Table.SDBaseItem.creatorId)
+            )
+            .where(eq(Table.SDBaseItem.id, query.mID))
 
-    const data: ItemType = ItemSchema.parse({
-        ...entries[0].SDBaseItem,
-        creator: entries[0].User,
-        container: entries[0].SDContainer,
-        images: [],
-    })
+        if (entries.length < 1) {
+            res.status(404).json({ error: 'No matching items found' })
+            return
+        }
 
-    for (let e of entries) {
-        data.images.push(RefImageSceham.parse(e.Image))
+        const data: ItemType = ItemSchema.parse({
+            ...entries[0].SDBaseItem,
+            creator: entries[0].User,
+            container: entries[0].SDContainer,
+            images: [],
+        })
+
+        for (let e of entries) {
+            data.images.push(RefImageSceham.parse(e.Image))
+        }
+
+        res.status(200).json({ data, meta: {} })
+    } catch (e) {
+        Logger.error(e)
+        res.status(500).json({ error: e.message })
     }
-
-    res.status(200).json({ data, meta: {} })
 })
 
 // ---> Create Endpoints <--- //
