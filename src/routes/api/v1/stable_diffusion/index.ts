@@ -6,11 +6,12 @@ import { ImageSchema, ImageType, RefImageSceham } from '$/routes/api/v1/image'
 
 import db from '@db'
 import * as Table from '@db/schema'
+import { encodeCursor, decodeCursor } from '@db/utils'
 
 import FS from 'fs'
 
 import z, { ZodError } from 'zod'
-import { aliasedTable, DrizzleError, eq, sql } from 'drizzle-orm'
+import { aliasedTable, and, arrayOverlaps, asc, count, DrizzleError, eq, getTableColumns, gt, inArray, or, sql } from 'drizzle-orm'
 import { alias } from 'drizzle-orm/pg-core'
 import Logger from '@log'
 
@@ -90,17 +91,43 @@ router.use(authMiddleware)
 // Query Modeles
 router.get('/models', async (req: Request, res: Response) => {
 	const QueryParams = z.object({
-		limit: z.number().int().max(50).default(20),
-		nsfw: z.boolean().default(false),
-		type: z.array(z.enum(Table.ESDItemType.enumValues)).default([]),
+		limit: z.coerce.number().int().max(50).default(20),
+		cursor: z.string().nullable().optional(),
+		nsfw: z.coerce.boolean().default(false),
+		types: z
+			.union([z.string(), z.array(z.enum(Table.ESDItemType.enumValues))])
+			.transform((v) => (typeof v === 'string' ? v.split(',') : v))
+			.default([]),
 	})
 	type QueryType = z.infer<typeof QueryParams>
-	const query: QueryType = QueryParams.parse(req.params)
+	const query: QueryType = QueryParams.parse(req.query)
+
+	const cursor = query.cursor ? decodeCursor(query.cursor) : null
 
 	try {
 		const entries = await db
 			.select()
-			.from(db.select().from(Table.SDBaseItem).as('SDBaseItem'))
+			.from(
+				db
+					.select()
+					.from(Table.SDBaseItem)
+					.limit(query.limit + 1)
+					.where(
+						cursor
+							? or(
+									gt(Table.SDBaseItem.createdAt, cursor.createdAt),
+									and(eq(Table.SDBaseItem.createdAt, cursor.createdAt), gt(Table.SDBaseItem.id, cursor.id))
+							  )
+							: undefined
+					)
+					.as('SDBaseItem')
+			)
+			.where(
+				and(
+					query.nsfw ? undefined : eq(Table.SDBaseItem.nsfw, false),
+					query.types.length > 0 ? inArray(Table.SDBaseItem.type, query.types) : undefined
+				)
+			)
 			.innerJoin(Table.User, eq(Table.User.id, Table.SDBaseItem.creatorId))
 			.leftJoin(Table.SDContainer, eq(Table.SDContainer.id, Table.SDBaseItem.containerId))
 			.leftJoin(Table.Image, eq(Table.Image.baseItemId, Table.SDBaseItem.id))
@@ -133,10 +160,18 @@ router.get('/models', async (req: Request, res: Response) => {
 
 		FS.writeFileSync('./test/data.json', JSON.stringify(entries, null, 4))
 
-		res.json({ data, meta: {} })
+		res.json({
+			data: data.slice(0, query.limit),
+			meta: {
+				nextCursor:
+					data.length > query.limit
+						? encodeCursor({ id: data[data.length - 1].id, createdAt: data[data.length - 1].createdAt })
+						: null,
+			},
+		})
 	} catch (e) {
-		Logger.error(e)
-		res.status(500).json({ error: e.message })
+		if (e instanceof Error) res.status(500).json({ error: e.message })
+		else Logger.debug(e)
 	}
 })
 
@@ -184,8 +219,8 @@ router.get('/containers', async (req: Request, res: Response) => {
 
 		res.json({ data, meta: {} })
 	} catch (e) {
-		Logger.error(e)
-		res.status(500).json({ error: e.message })
+		if (e instanceof Error) res.status(500).json({ error: e.message })
+		else Logger.error(e)
 	}
 })
 
@@ -226,8 +261,8 @@ router.get('/containers/:cID', async (req: Request, res: Response) => {
 
 		res.json({ data, meta: {} })
 	} catch (e) {
-		Logger.error(e)
-		res.status(500).json({ error: e.message })
+		if (e instanceof Error) res.status(500).json({ error: e.message })
+		else Logger.error(e)
 	}
 })
 
@@ -296,8 +331,8 @@ router.get('/models/:mID', async (req: Request, res: Response) => {
 
 		res.status(200).json({ data, meta: {} })
 	} catch (e) {
-		Logger.error(e)
-		res.status(500).json({ error: e.message })
+		if (e instanceof Error) res.status(500).json({ error: e.message })
+		else Logger.error(e)
 	}
 })
 

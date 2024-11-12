@@ -15,7 +15,8 @@
 			"@env": ["./src/Env.ts"],
 			"@log": ["./src/service/Logger.ts"],
 			"@db": ["./src/db/index.ts"],
-			"@db/schema": ["./src/db/Schema.ts"]
+			"@db/schema": ["./src/db/Schema.ts"],
+            "@db/utils": ["./src/db/Utils.ts"],
 		}
 	}
 }
