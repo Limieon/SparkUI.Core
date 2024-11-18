@@ -10,7 +10,7 @@ import { encodeCursor, decodeCursor } from '@db/utils'
 
 import FS, { readSync } from 'fs'
 
-import z, { ZodError } from 'zod'
+import z, { ZodDefault, ZodError } from 'zod'
 import {
     aliasedTable,
     and,
@@ -714,7 +714,74 @@ router.patch('/containers/:cID', async (req: Request, res: Response) => {
 // Add a model to a container
 router.put(
     '/containers/:cID/model/:mID',
-    async (req: Request, res: Response) => {}
+    async (req: Request, res: Response) => {
+        const QueryParams = z.object({
+            cID: z.string().uuid(),
+            mID: z.string().uuid(),
+        })
+        type QueryType = z.infer<typeof QueryParams>
+        const query: QueryType = QueryParams.parse({
+            ...req.query,
+            ...req.params,
+        })
+
+        const user = req.user
+        if (!user) {
+            res.status(401).json({ error: 'User not found' })
+            return
+        }
+
+        try {
+            const container = await db
+                .select({ creatorID: Table.SDContainer.creatorId })
+                .from(Table.SDContainer)
+                .where(eq(Table.SDContainer.id, query.cID))
+                .limit(1)
+            if (container.length < 1) {
+                res.status(400).json({ error: 'Container not found' })
+                return
+            }
+
+            const c = container[0]
+            if (c.creatorID !== user.sub) {
+                res.status(403).json({
+                    error: 'You are not the creator of this container',
+                })
+                return
+            }
+
+            const model = await db
+                .select({ creatorID: Table.SDBaseItem.creatorId })
+                .from(Table.SDBaseItem)
+                .where(eq(Table.SDBaseItem.id, query.mID))
+                .limit(1)
+            if (model.length < 1) {
+                res.status(400).json({ error: 'Model not found' })
+                return
+            }
+
+            const m = model[0]
+            if (m.creatorID !== user.sub) {
+                res.status(403).json({
+                    error: 'You are not the creator of this model',
+                })
+                return
+            }
+
+            await db
+                .update(Table.SDBaseItem)
+                .set({ containerId: query.cID })
+                .where(eq(Table.SDBaseItem.id, query.mID))
+
+            res.status(200).json({ message: 'Successfully added model' })
+        } catch (e) {
+            if (e instanceof ZodDefault) {
+                res.status(400).json({ error: e.errors })
+                return
+            }
+            res.status(500).json({ error: e.message })
+        }
+    }
 )
 
 // Edit a models meta
