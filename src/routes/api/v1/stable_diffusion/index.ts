@@ -504,7 +504,56 @@ router.post('/containers', async (req: Request, res: Response) => {
 
 // Delete a container if no models are assigned to it
 router.delete('/containers/:cID', async (req: Request, res: Response) => {
+    const QueryScheme = z.object({ cID: z.string().uuid() })
+    type QueryType = z.infer<typeof QueryScheme>
+    const query: QueryType = QueryScheme.parse(req.params)
+
     const user = req.user
+    if (!user) {
+        res.status(401).json({ error: 'User not found' })
+        return
+    }
+
+    try {
+        const containers = await db
+            .select()
+            .from(Table.SDContainer)
+            .where(eq(Table.SDContainer.id, query.cID))
+
+        if (containers.length < 1) {
+            res.status(400).json({ error: 'Container not found' })
+            return
+        }
+
+        const data = containers[0]
+        if (data.creatorId !== user.sub) {
+            res.status(403).json({
+                error: 'You are not the creator of this container',
+            })
+            return
+        }
+
+        if (
+            (
+                await db
+                    .select({ id: Table.SDBaseItem.id })
+                    .from(Table.SDBaseItem)
+                    .where(eq(Table.SDBaseItem.containerId, data.id))
+                    .limit(1)
+            ).length > 1
+        ) {
+            res.status(400).json({ error: 'Container is not empty' })
+            return
+        }
+
+        await db
+            .delete(Table.SDContainer)
+            .where(eq(Table.SDContainer.id, data.id))
+
+        res.status(200).json({ message: 'Successfully deleted container' })
+    } catch (e) {
+        res.status(500).json({ error: e.message })
+    }
 })
 
 // Create a new model
