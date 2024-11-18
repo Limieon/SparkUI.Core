@@ -10,7 +10,7 @@ import { encodeCursor, decodeCursor } from '@db/utils'
 
 import FS, { readSync } from 'fs'
 
-import z, { ZodDefault, ZodError } from 'zod'
+import z, { ZodDefault, ZodError, ZodLazy } from 'zod'
 import {
     aliasedTable,
     and,
@@ -786,17 +786,56 @@ router.put(
 
 // Edit a models meta
 router.patch('/models/:mID', async (req: Request, res: Response) => {
-    const user = req.user
-})
+    const QueryParams = z.object({
+        cID: z.string().uuid(),
+        mID: z.string().uuid(),
+    })
+    type QueryType = z.infer<typeof QueryParams>
+    const query: QueryType = QueryParams.parse({
+        ...req.query,
+        ...req.params,
+    })
 
-// Add a tag to a model
-router.put('/models/:mID/tag/:tag', async (req: Request, res: Response) => {
     const user = req.user
-})
+    if (!user) {
+        res.status(401).json({ error: 'User not found' })
+        return
+    }
 
-// Remove a tag from a model
-router.delete('/models/:mID/tag/:tag', async (req: Request, res: Response) => {
-    const user = req.user
+    try {
+        const data = UpdateItemSchema.partial().parse(req.body)
+
+        const models = await db
+            .select()
+            .from(Table.SDBaseItem)
+            .where(eq(Table.SDBaseItem.id, query.mID))
+
+        if (models.length < 1) {
+            res.status(400).json({ error: 'Model not found' })
+            return
+        }
+
+        const model = models[0]
+        if (model.creatorId !== user.sub) {
+            res.status(403).json({
+                error: 'You are not the creator of this model',
+            })
+            return
+        }
+
+        await db
+            .update(Table.SDBaseItem)
+            .set(data)
+            .where(eq(Table.SDBaseItem.id, model.id))
+
+        res.status(200).json({ message: 'Successfully updated model' })
+    } catch (e) {
+        if (e instanceof ZodError) {
+            res.status(400).json({ error: e.errors })
+            return
+        }
+        res.status(500).json({ error: e.message })
+    }
 })
 
 export default router
