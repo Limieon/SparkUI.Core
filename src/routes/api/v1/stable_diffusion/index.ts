@@ -41,6 +41,7 @@ export const RefContainerSchema = z.object({
     id: z.string(),
     name: z.string(),
     description: z.string(),
+    brief: z.string(),
 })
 export type RefContainerType = z.infer<typeof RefContainerSchema>
 
@@ -92,10 +93,12 @@ export const ItemSchema = z.object({
 export type ItemType = z.infer<typeof ItemSchema>
 export const UpdateItemSchema = ItemSchema.omit({
     id: true,
-    images: true,
+    container: true,
     creator: true,
+    images: true,
     createdAt: true,
     updatedAt: true,
+    lastUsedAt: true,
 })
 export type UpdateItemType = z.infer<typeof UpdateItemSchema>
 
@@ -117,7 +120,7 @@ router.get('/models', async (req: Request, res: Response) => {
             .default([]),
     })
     type QueryType = z.infer<typeof QueryParams>
-    const query: QueryType = QueryParams.parse(req.query)
+    const query: QueryType = QueryParams.parse({ ...req.query, ...req.params })
 
     const cursor = query.cursor ? decodeCursor(query.cursor) : null
 
@@ -231,7 +234,7 @@ router.get('/containers', async (req: Request, res: Response) => {
             .default([]),
     })
     type QueryType = z.infer<typeof QueryParams>
-    const query: QueryType = QueryParams.parse(req.query)
+    const query: QueryType = QueryParams.parse({ ...req.query, ...req.params })
     const cursor = query.cursor ? decodeCursor(query.cursor) : null
 
     try {
@@ -332,7 +335,7 @@ router.get('/containers/:cID', async (req: Request, res: Response) => {
         cID: z.string(),
     })
     type QueryType = z.infer<typeof QueryParams>
-    const query: QueryType = QueryParams.parse(req.params)
+    const query: QueryType = QueryParams.parse({ ...req.query, ...req.params })
 
     try {
         const entries = await db
@@ -381,7 +384,10 @@ router.get(
             i: z.coerce.number().default(0),
         })
         type QueryType = z.infer<typeof QueryParams>
-        const query: QueryType = QueryParams.parse(req.params)
+        const query: QueryType = QueryParams.parse({
+            ...req.query,
+            ...req.params,
+        })
 
         try {
             res.setHeader('Content-Type', 'image/webp')
@@ -412,7 +418,7 @@ router.get('/models/:mID', async (req: Request, res: Response) => {
         mID: z.string().uuid(),
     })
     type QueryType = z.infer<typeof QueryParams>
-    const query: QueryType = QueryParams.parse(req.params)
+    const query: QueryType = QueryParams.parse({ ...req.query, ...req.params })
     const user = req.user
 
     try {
@@ -460,9 +466,9 @@ router.get('/models/:mID', async (req: Request, res: Response) => {
 // ---> Create Endpoints <--- //
 // Create a new container
 router.post('/containers', async (req: Request, res: Response) => {
-    const QueryScheme = z.object({})
-    type QueryType = z.infer<typeof QueryScheme>
-    const query: QueryType = QueryScheme.parse(req.params)
+    const QueryParams = z.object({})
+    type QueryType = z.infer<typeof QueryParams>
+    const query: QueryType = QueryParams.parse({ ...req.query, ...req.params })
 
     const user = req.user
     if (!user) {
@@ -486,6 +492,7 @@ router.post('/containers', async (req: Request, res: Response) => {
             id: inserted.id,
             name: inserted.name!,
             description: inserted.description!,
+            brief: inserted.brief!,
         }
 
         res.status(200).json({
@@ -504,9 +511,11 @@ router.post('/containers', async (req: Request, res: Response) => {
 
 // Delete a container if no models are assigned to it
 router.delete('/containers/:cID', async (req: Request, res: Response) => {
-    const QueryScheme = z.object({ cID: z.string().uuid() })
-    type QueryType = z.infer<typeof QueryScheme>
-    const query: QueryType = QueryScheme.parse(req.params)
+    const QueryParams = z.object({
+        cID: z.string().uuid(),
+    })
+    type QueryType = z.infer<typeof QueryParams>
+    const query: QueryType = QueryParams.parse({ ...req.query, ...req.params })
 
     const user = req.user
     if (!user) {
@@ -540,7 +549,7 @@ router.delete('/containers/:cID', async (req: Request, res: Response) => {
                     .from(Table.SDBaseItem)
                     .where(eq(Table.SDBaseItem.containerId, data.id))
                     .limit(1)
-            ).length > 1
+            ).length > 0
         ) {
             res.status(400).json({ error: 'Container is not empty' })
             return
@@ -558,12 +567,96 @@ router.delete('/containers/:cID', async (req: Request, res: Response) => {
 
 // Create a new model
 router.post('/models', async (req: Request, res: Response) => {
+    const QueryParams = z.object({
+        cID: z.string().uuid().optional(),
+    })
+    type QueryType = z.infer<typeof QueryParams>
+    const query: QueryType = QueryParams.parse({ ...req.query, ...req.params })
+
     const user = req.user
+    if (!user) {
+        res.status(401).json({ error: 'User not found' })
+        return
+    }
+
+    Logger.debug(query)
+    Logger.debug(req.query)
+
+    try {
+        const data = UpdateItemSchema.parse(req.body)
+        const inserted = (
+            await db
+                .insert(Table.SDBaseItem)
+                .values({
+                    ...data,
+                    containerId: query.cID,
+                    creatorId: user?.sub,
+                })
+                .returning()
+        )[0]
+
+        const result: RefItemType = {
+            id: inserted.id,
+            brief: inserted.brief!,
+            name: inserted.name!,
+            description: inserted.description!,
+        }
+
+        res.status(200).json({
+            message: 'Successfully inserted model!',
+            data: result,
+        })
+    } catch (e) {
+        if (e instanceof ZodError) {
+            res.status(400).json({ error: e.errors })
+            return
+        }
+
+        res.status(500).json({ error: e.message })
+    }
 })
 
 // Delete a model
 router.delete('/models/:mID', async (req: Request, res: Response) => {
+    const QueryParams = z.object({
+        mID: z.string().uuid(),
+    })
+    type QueryType = z.infer<typeof QueryParams>
+    const query: QueryType = QueryParams.parse({ ...req.query, ...req.params })
+
     const user = req.user
+    if (!user) {
+        res.status(401).json({ error: 'User not found' })
+        return
+    }
+
+    try {
+        const models = await db
+            .select()
+            .from(Table.SDBaseItem)
+            .where(eq(Table.SDBaseItem.id, query.mID))
+
+        if (models.length < 1) {
+            res.status(400).json({ error: 'Model not found' })
+            return
+        }
+
+        const data = models[0]
+        if (data.creatorId !== user.sub) {
+            res.status(403).json({
+                error: 'You are not the creator of this model',
+            })
+            return
+        }
+
+        await db
+            .delete(Table.SDBaseItem)
+            .where(eq(Table.SDBaseItem.id, data.id))
+
+        res.status(200).json({ message: 'Successfully deleted model' })
+    } catch (e) {
+        res.status(500).json({ error: e.message })
+    }
 })
 
 // ---> Mutate Endpoints <--- //
