@@ -662,15 +662,59 @@ router.delete('/models/:mID', async (req: Request, res: Response) => {
 // ---> Mutate Endpoints <--- //
 // Edit a containers meta
 router.patch('/containers/:cID', async (req: Request, res: Response) => {
+    const QueryParams = z.object({
+        cID: z.string().uuid(),
+    })
+    type QueryType = z.infer<typeof QueryParams>
+    const query: QueryType = QueryParams.parse({ ...req.query, ...req.params })
+
     const user = req.user
+    if (!user) {
+        res.status(401).json({ error: 'User not found' })
+        return
+    }
+
+    try {
+        const data = UpdateContainerSchema.partial().parse(req.body)
+        const containers = await db
+            .select()
+            .from(Table.SDContainer)
+            .where(eq(Table.SDContainer.id, query.cID))
+
+        if (containers.length < 1) {
+            res.status(400).json({ error: 'Container not found' })
+            return
+        }
+
+        const container = containers[0]
+        if (container.creatorId !== user.sub) {
+            res.status(403).json({
+                error: 'You are not the creator of this container',
+            })
+            return
+        }
+
+        Logger.debug(data)
+
+        await db
+            .update(Table.SDContainer)
+            .set(data)
+            .where(eq(Table.SDContainer.id, container.id))
+
+        res.status(200).json({ message: 'Successfully updated container' })
+    } catch (e) {
+        if (e instanceof ZodError) {
+            res.status(400).json({ error: e.errors })
+            return
+        }
+        res.status(500).json({ error: e.message })
+    }
 })
 
 // Add a model to a container
 router.put(
     '/containers/:cID/model/:mID',
-    async (req: Request, res: Response) => {
-        const user = req.user
-    }
+    async (req: Request, res: Response) => {}
 )
 
 // Edit a models meta
