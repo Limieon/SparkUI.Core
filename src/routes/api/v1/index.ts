@@ -1,5 +1,6 @@
 import { authMiddleware } from '$/service/Auth'
-import { Router, Request, Response } from 'express'
+import { Router, Request, Response, NextFunction } from 'express'
+import Logger from '@log'
 
 const router = Router()
 router.use(authMiddleware)
