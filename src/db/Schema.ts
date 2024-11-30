@@ -348,6 +348,7 @@ export const SDLoraItem = pgTable('SDLoraItem', {
 	id: uuid('id')
 		.references(() => SDBaseItem.id)
 		.primaryKey(),
+	triggerWords: varchar('trigger_words', { length: 256 }).default(''),
 })
 export const SDLoraItemRelations = relations(SDLoraItem, ({ one }) => ({
 	item: one(SDBaseItem, {
@@ -360,6 +361,7 @@ export const SDEmbeddingItem = pgTable('SDEmbeddingItem', {
 	id: uuid('id')
 		.references(() => SDBaseItem.id)
 		.primaryKey(),
+	triggerWords: varchar('trigger_words', { length: 256 }).default(''),
 })
 export const SDEmbeddingItemRelations = relations(SDEmbeddingItem, ({ one }) => ({
 	item: one(SDBaseItem, {

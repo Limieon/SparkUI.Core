@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { RefUserSchema } from '../user'
+import * as UserSchemas from '../user/Schemas'
 import * as ImageSchemas from '../image/Schemas'
 
 import * as Table from '@db/schema'
@@ -26,7 +26,7 @@ export const Container = z.object({
 	description: z.string(),
 	brief: z.string(),
 
-	creator: RefUserSchema,
+	creator: UserSchemas.RefUser,
 	items: z.array(RefItem),
 
 	createdAt: z.date(),
@@ -57,7 +57,7 @@ export const Item = z.object({
 	trainingType: z.enum(Table.SDBaseItem.trainingType.enumValues),
 
 	container: RefContainer,
-	creator: RefUserSchema,
+	creator: UserSchemas.RefUser,
 	images: z.array(ImageSchemas.RefImage),
 
 	createdAt: z.date(),

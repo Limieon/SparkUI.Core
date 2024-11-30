@@ -1,9 +1,6 @@
 import { authMiddleware, JWTRPayload } from '$/service/Auth'
 import e, { Router, Request, Response } from 'express'
 
-import { RefUserSchema, UserSchema } from '$/routes/api/v1/user'
-import { ImageSchema, ImageType, RefImageSchema } from '$/routes/api/v1/image'
-
 import db from '@db'
 import * as Table from '@db/schema'
 import { encodeCursor, decodeCursor } from '@db/utils'
@@ -32,6 +29,8 @@ import Logger from '@log'
 import { valiadteSchema, validateBodySchema, validateQuerySchema } from '$/Router'
 
 import * as Schemas from './Schemas'
+import * as ImageSchemas from '../image/Schemas'
+import * as UserSchemas from '../user/Schemas'
 
 const router = Router()
 router.use(authMiddleware)
@@ -104,7 +103,7 @@ router.get('/models', validateQuerySchema(getModelsSchema), async (req: Request,
 			}
 
 			if (e.Image == undefined) continue
-			data[data.length - 1].images.push(RefImageSchema.parse(e.Image))
+			data[data.length - 1].images.push(ImageSchemas.RefImage.parse(e.Image))
 		}
 		const count = data.length
 
@@ -317,7 +316,7 @@ router.get('/models/:mID', validateQuerySchema(getModelSchema), async (req: Requ
 
 		for (let e of entries) {
 			if (e.Image == undefined) continue
-			data.images.push(RefImageSchema.parse(e.Image))
+			data.images.push(ImageSchemas.RefImage.parse(e.Image))
 		}
 
 		res.status(200).json({ data, meta: {} })
