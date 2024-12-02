@@ -43,12 +43,8 @@ export async function initRoutes(dir: string, prefix: string) {
 
 			const routerPrefix = Path.join(prefix, Path.relative(dir, path)).replaceAll('\\', '/')
 			Logger.debug('Loading route', routerPrefix)
-			const data = await import(item)
-			if (data.default instanceof Router) {
-				data.default.register()
-			} else {
-				handler.use(routerPrefix, (await import(item)).default as Express.Router)
-			}
+			const router = await import(item)
+			handler.use(routerPrefix, router.default as Express.Router)
 		}
 	}
 

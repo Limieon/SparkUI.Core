@@ -50,7 +50,7 @@ const getModelsSchema = z.object({
 })
 type GetModelsType = z.infer<typeof getModelsSchema>
 
-router.get('/models', validateQuerySchema(getModelsSchema), async (req: Request, res: Response) => {
+router.get('/items', validateQuerySchema(getModelsSchema), async (req: Request, res: Response) => {
 	const query = req.query as unknown as GetModelsType
 	const cursor = query.cursor ? decodeCursor(query.cursor) : null
 
@@ -236,8 +236,6 @@ router.get('/containers/:cID', validateQuerySchema(getContainerSchema), async (r
 			return
 		}
 
-		FS.writeFileSync('test/data.json', JSON.stringify(entries, null, 4))
-
 		let data: Schemas.ContainerType = Schemas.Container.parse({
 			...entries[0].SDContainer,
 			creator: entries[0].User,
@@ -291,7 +289,7 @@ const getModelSchema = z.object({
 })
 type GetModelType = z.infer<typeof getModelSchema>
 
-router.get('/models/:mID', validateQuerySchema(getModelSchema), async (req: Request, res: Response) => {
+router.get('/items/:mID', validateQuerySchema(getModelSchema), async (req: Request, res: Response) => {
 	const user = req.user
 	const query = req.query as unknown as GetModelType
 
@@ -472,7 +470,7 @@ const modelRoutes = {
 
 for (const [key, value] of Object.entries(modelRoutes)) {
 	router.post(
-		`/:containerID/models/${key}`,
+		`/:containerID/items/${key}`,
 		valiadteSchema(z.object({ containerID: z.string().uuid() }), value.updateSchema),
 		async (req: Request, res: Response) => {
 			const user = req.user!
@@ -492,7 +490,7 @@ for (const [key, value] of Object.entries(modelRoutes)) {
 }
 
 // Delete a model
-router.delete('/models/:mID', async (req: Request, res: Response) => {
+router.delete('/items/:mID', async (req: Request, res: Response) => {
 	const QueryParams = z.object({
 		mID: z.string().uuid(),
 	})
@@ -576,7 +574,7 @@ router.patch('/containers/:cID', async (req: Request, res: Response) => {
 })
 
 // Add a model to a container
-router.put('/containers/:cID/model/:mID', async (req: Request, res: Response) => {
+router.put('/containers/:cID/item/:mID', async (req: Request, res: Response) => {
 	const QueryParams = z.object({
 		cID: z.string().uuid(),
 		mID: z.string().uuid(),
@@ -649,7 +647,7 @@ const patchItemQuerySchema = z.object({
 })
 type PatchItemQueryType = z.infer<typeof patchItemQuerySchema>
 
-router.patch('/models/:mID', validateQuerySchema(patchItemQuerySchema), async (req: Request, res: Response) => {
+router.patch('/items/:mID', validateQuerySchema(patchItemQuerySchema), async (req: Request, res: Response) => {
 	const query = req.query as unknown as PatchItemQueryType
 
 	const user = req.user

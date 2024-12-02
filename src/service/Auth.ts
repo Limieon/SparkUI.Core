@@ -6,6 +6,8 @@ import * as Env from '@env'
 import bcrypt from 'bcrypt'
 import { eq, or } from 'drizzle-orm'
 
+import Logger from '@log'
+
 import Express, { Router, type NextFunction, type Request, type Response, RequestHandler } from 'express'
 
 export type TokenPair = {
@@ -92,6 +94,12 @@ async function getTokenCookies(req: Request): Promise<{ access?: string; refresh
 }
 
 export const authMiddleware: RequestHandler = async (req: Request, res: Response, next: NextFunction) => {
+	Logger.debug('Running Auth Middleware')
+	if (req.url.startsWith('/auth')) {
+		next()
+		return
+	}
+
 	let { access, refresh } = await getTokenCookies(req)
 	let userPayload: JWTPayload | null = null
 
