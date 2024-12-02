@@ -65,6 +65,36 @@ export const Item = z.object({
 	lastUsedAt: z.date().nullable(),
 })
 export type ItemType = z.infer<typeof Item>
+
+export const CheckpointItem = Item.merge(
+	z.object({
+		refiner: z.boolean(),
+	})
+)
+
+export const LoraItem = Item.merge(
+	z.object({
+		triggerWords: z.array(z.string()),
+	})
+)
+export type LoraItemType = z.infer<typeof LoraItem>
+
+export const EmbeddingItem = Item.merge(
+	z.object({
+		triggerWords: z.array(z.string()),
+	})
+)
+export type EmbeddingItemType = z.infer<typeof EmbeddingItem>
+
+export const VAEItem = Item.merge(z.object({}))
+export type VAEItemType = z.infer<typeof VAEItem>
+
+export const ControlNetItem = Item.merge(z.object({}))
+export type ControlNetItemType = z.infer<typeof ControlNetItem>
+
+export const ControlNetPreprocessorItem = Item.merge(z.object({}))
+export type ControlNetPreprocessorItemType = z.infer<typeof ControlNetPreprocessorItem>
+
 export const UpdateItem = Item.omit({
 	id: true,
 	container: true,
@@ -75,3 +105,69 @@ export const UpdateItem = Item.omit({
 	lastUsedAt: true,
 })
 export type UpdateItemType = z.infer<typeof UpdateItem>
+
+export const UpdateCheckpointItem = CheckpointItem.omit({
+	id: true,
+	container: true,
+	creator: true,
+	images: true,
+	createdAt: true,
+	updatedAt: true,
+	lastUsedAt: true,
+})
+export type UpdateCheckpointItemType = z.infer<typeof UpdateCheckpointItem>
+
+export const UpdateLoraItem = LoraItem.omit({
+	id: true,
+	container: true,
+	creator: true,
+	images: true,
+	createdAt: true,
+	updatedAt: true,
+	lastUsedAt: true,
+})
+export type UpdateLoraItemType = z.infer<typeof UpdateLoraItem>
+
+export const UpdateEmbeddingItem = EmbeddingItem.omit({
+	id: true,
+	container: true,
+	creator: true,
+	images: true,
+	createdAt: true,
+	updatedAt: true,
+	lastUsedAt: true,
+})
+export type UpdateEmbeddingItemType = z.infer<typeof UpdateEmbeddingItem>
+
+export const UpdateVAEItem = VAEItem.omit({
+	id: true,
+	container: true,
+	creator: true,
+	images: true,
+	createdAt: true,
+	updatedAt: true,
+	lastUsedAt: true,
+})
+export type UpdateVAEItemType = z.infer<typeof UpdateVAEItem>
+
+export const UpdateControlNetItem = ControlNetItem.omit({
+	id: true,
+	container: true,
+	creator: true,
+	images: true,
+	createdAt: true,
+	updatedAt: true,
+	lastUsedAt: true,
+})
+export type UpdateControlNetItemType = z.infer<typeof UpdateControlNetItem>
+
+export const UpdateControlNetPreprocessorItem = ControlNetPreprocessorItem.omit({
+	id: true,
+	container: true,
+	creator: true,
+	images: true,
+	createdAt: true,
+	updatedAt: true,
+	lastUsedAt: true,
+})
+export type UpdateControlNetPreprocessorItemType = z.infer<typeof UpdateControlNetPreprocessorItem>

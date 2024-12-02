@@ -370,6 +370,18 @@ export const SDEmbeddingItemRelations = relations(SDEmbeddingItem, ({ one }) => 
 	}),
 }))
 
+export const SDVAEItem = pgTable('SDVAEItem', {
+	id: uuid('id')
+		.references(() => SDBaseItem.id)
+		.primaryKey(),
+})
+export const SDVAEItemRelations = relations(SDVAEItem, ({ one }) => ({
+	item: one(SDBaseItem, {
+		fields: [SDVAEItem.id],
+		references: [SDBaseItem.id],
+	}),
+}))
+
 export const SDControlNetItem = pgTable('SDControlNetItem', {
 	id,
 

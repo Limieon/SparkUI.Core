@@ -5,6 +5,8 @@ import db from '@db'
 import * as Table from '@db/schema'
 import { encodeCursor, decodeCursor } from '@db/utils'
 
+import * as Env from '@env'
+
 import FS, { readSync } from 'fs'
 
 import z, { ZodDefault, ZodError, ZodLazy } from 'zod'
@@ -24,7 +26,7 @@ import {
 	or,
 	sql,
 } from 'drizzle-orm'
-import { alias } from 'drizzle-orm/pg-core'
+import { alias, DefaultViewBuilderCore } from 'drizzle-orm/pg-core'
 import Logger from '@log'
 import { valiadteSchema, validateBodySchema, validateQuerySchema } from '$/Router'
 
@@ -412,55 +414,82 @@ router.delete('/containers/:cID', validateQuerySchema(deleteContainerSchema), as
 })
 
 // Create a new model
-router.post('/models', async (req: Request, res: Response) => {
-	const QueryParams = z.object({
-		cID: z.string().uuid().optional(),
-	})
-	type QueryType = z.infer<typeof QueryParams>
-	const query: QueryType = QueryParams.parse({ ...req.query, ...req.params })
+async function createDefaultItem(item: Schemas.UpdateItemType, containerID: string, creatorID: string): Promise<string> {
+	const data = (
+		await db
+			.insert(Table.SDBaseItem)
+			.values({
+				type: item.type,
+				name: item.name,
+				description: item.description,
+				brief: item.brief,
+				version: item.version,
+				usedInBatches: item.usedInBatches,
+				usedInImages: item.usedInImages,
+				nsfw: item.nsfw,
+				nsfwLevel: item.nsfwLevel,
+				trainingType: item.trainingType,
+				containerId: containerID,
+				creatorId: creatorID,
+			})
+			.returning({ id: Table.SDBaseItem.id })
+	)[0]
+	return data.id
+}
 
-	const user = req.user
-	if (!user) {
-		res.status(401).json({ error: 'User not found' })
-		return
-	}
+const modelRoutes = {
+	checkpoint: {
+		schema: Schemas.CheckpointItem,
+		updateSchema: Schemas.UpdateCheckpointItem,
+		table: Table.SDCheckpointItem,
+	},
+	lora: {
+		schema: Schemas.LoraItem,
+		updateSchema: Schemas.UpdateLoraItem,
+		table: Table.SDLoraItem,
+	},
+	embedding: {
+		schema: Schemas.EmbeddingItem,
+		updateSchema: Schemas.UpdateEmbeddingItem,
+		table: Table.SDEmbeddingItem,
+	},
+	vae: {
+		schema: Schemas.VAEItem,
+		updateSchema: Schemas.UpdateVAEItem,
+		table: Table.SDVAEItem,
+	},
+	controlnet: {
+		schema: Schemas.ControlNetItem,
+		updateSchema: Schemas.UpdateControlNetItem,
+		table: Table.SDControlNetItem,
+	},
+	controlnet_preprocessor: {
+		schema: Schemas.ControlNetPreprocessorItem,
+		updateSchema: Schemas.UpdateControlNetPreprocessorItem,
+		table: Table.SDControlNetPreProcessorItem,
+	},
+}
 
-	Logger.debug(query)
-	Logger.debug(req.query)
+for (const [key, value] of Object.entries(modelRoutes)) {
+	router.post(
+		`/:containerID/models/${key}`,
+		valiadteSchema(z.object({ containerID: z.string().uuid() }), value.updateSchema),
+		async (req: Request, res: Response) => {
+			const user = req.user!
+			const data = req.body as z.infer<typeof value.updateSchema>
+			const containerID = req.params.containerID
 
-	try {
-		const data = Schemas.UpdateItem.parse(req.body)
-		const inserted = (
-			await db
-				.insert(Table.SDBaseItem)
-				.values({
-					...data,
-					containerId: query.cID,
-					creatorId: user?.sub,
-				})
-				.returning()
-		)[0]
+			try {
+				const itemID = await createDefaultItem(data, containerID, user.sub)
+				await db.insert(value.table).values({ id: itemID, ...data })
 
-		const result: Schemas.RefItemType = {
-			id: inserted.id,
-			brief: inserted.brief!,
-			name: inserted.name!,
-			description: inserted.description!,
+				res.status(200).json({ message: 'Successfully created model', data: { id: itemID } })
+			} catch (e) {
+				res.status(500).json({ error: "Couldn't create model", details: Env.SPARKUI_CORE_DEBUG ? e.message : undefined })
+			}
 		}
-
-		res.status(200).json({
-			message: 'Successfully inserted model!',
-			data: result,
-		})
-	} catch (e) {
-		if (e instanceof ZodError) {
-			res.status(400).json({ error: e.errors })
-			return
-		}
-
-		res.status(500).json({ error: e.message })
-	}
-})
+	)
+}
 
 // Delete a model
 router.delete('/models/:mID', async (req: Request, res: Response) => {
