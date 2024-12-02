@@ -37,7 +37,7 @@ export const ESDItemType = pgEnum('ESDItemType', [
 	'Other',
 ])
 export const EModelFileFormat = pgEnum('EFileFormat', ['SafeTensors', 'PickleTensor', 'ONNX', 'Other'])
-export const EModelPrecision = pgEnum('EPrecision', ['FP32', 'FP16', 'BF16'])
+export const EModelPrecision = pgEnum('EPrecision', ['FP32', 'FP16', 'BF16', 'Unknown'])
 export const EModelSizeType = pgEnum('ESizeType', ['Pruned', 'Full', 'Unknown'])
 export const EGenerationStatus = pgEnum('EGenerationStatus', ['Pending', 'Running', 'Succeded', 'Failed'])
 export const EControlNetType = pgEnum('EControlNetType', [

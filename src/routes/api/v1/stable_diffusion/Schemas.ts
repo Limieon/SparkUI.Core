@@ -66,6 +66,22 @@ export const Item = z.object({
 })
 export type ItemType = z.infer<typeof Item>
 
+export const ModelFile = z.object({
+	id: z.string().uuid(),
+	name: z.string(),
+	sha1: z.string(),
+	sha256: z.string(),
+	modelHash: z.string(),
+	sizeMB: z.number(),
+	format: z.string().optional().nullable(),
+	precision: z.string(),
+
+	uploader: UserSchemas.RefUser,
+
+	createdAt: z.date(),
+})
+export type ModelFileType = z.infer<typeof ModelFile>
+
 export const CheckpointItem = Item.merge(
 	z.object({
 		refiner: z.boolean(),

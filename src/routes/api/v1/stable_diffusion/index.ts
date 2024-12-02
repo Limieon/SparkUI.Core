@@ -33,6 +33,12 @@ import { valiadteSchema, validateBodySchema, validateQuerySchema } from '$/Route
 import * as Schemas from './Schemas'
 import * as ImageSchemas from '../image/Schemas'
 import * as UserSchemas from '../user/Schemas'
+import { getSDHashes } from '$/utils/HashUtils'
+import { SafeTensors } from '$/utils/FileUtils'
+
+import Path from 'path'
+
+import * as DirUtils from '$/utils/DirUtils'
 
 const router = Router()
 router.use(authMiddleware)
@@ -326,6 +332,40 @@ router.get('/items/:mID', validateQuerySchema(getModelSchema), async (req: Reque
 	}
 })
 
+const getModelFilesSchema = z.object({
+	mID: z.string(),
+})
+type GetModelFilesType = z.infer<typeof getModelFilesSchema>
+
+router.get('/items/:mID/files', validateQuerySchema(getModelFilesSchema), async (req: Request, res: Response) => {
+	const user = req.user!
+	const query = req.query as unknown as GetModelFilesType
+
+	try {
+		const entries = await db
+			.select()
+			.from(Table.SDModelFile)
+			.where(eq(Table.SDModelFile.itemId, query.mID))
+			.innerJoin(Table.User, eq(Table.User.id, Table.SDModelFile.uploaderId))
+
+		const data: Schemas.ModelFileType[] = []
+		for (let e of entries) {
+			data.push(
+				Schemas.ModelFile.parse({
+					...e.SDModelFile,
+					name: Path.basename(e.SDModelFile.location!),
+					uploader: e.User,
+				})
+			)
+		}
+
+		res.status(200).json({ data })
+	} catch (e) {
+		if (e instanceof Error) res.status(500).json({ error: JSON.parse(e.message) })
+		else Logger.error(e)
+	}
+})
+
 // ---> Create Endpoints <--- //
 // Create a new container
 router.post('/containers', validateBodySchema(Schemas.UpdateContainer), async (req: Request, res: Response) => {
@@ -488,6 +528,77 @@ for (const [key, value] of Object.entries(modelRoutes)) {
 		}
 	)
 }
+
+router.put('/items/:mID/file', async (req: Request, res: Response) => {
+	const user = req.user!
+
+	try {
+		const itemData = (await db.select().from(Table.SDBaseItem).where(eq(Table.SDBaseItem.id, req.params.mID)))[0]
+		if (itemData.creatorId !== user.sub) {
+			res.status(403).json({ error: 'You are not the creator of this model' })
+			return
+		}
+
+		const tempFilePath = DirUtils.getTempFilePath()
+		const writeStream = FS.createWriteStream(tempFilePath)
+
+		Logger.debug({ tempFilePath })
+		req.pipe(writeStream)
+
+		req.on('end', async () => {
+			Logger.debug('File upload complete')
+
+			const hashes = await getSDHashes(tempFilePath)
+			const size = FS.statSync(tempFilePath).size / (1024 * 1024) // MB
+
+			try {
+				const header = await SafeTensors.getHeader(tempFilePath)
+				FS.writeFileSync('./header.json', JSON.stringify(header, null, 4))
+
+				const precision = SafeTensors.getDType(header)
+
+				const itemPath = DirUtils.getModelFilePath(itemData.name, 'safetensors', itemData.type)
+				const itemDir = Path.dirname(itemPath)
+				if (!FS.existsSync(itemDir)) FS.mkdirSync(itemDir, { recursive: true })
+
+				FS.renameSync(tempFilePath, itemPath)
+
+				const data = (
+					await db
+						.insert(Table.SDModelFile)
+						.values({
+							location: itemPath,
+							precision,
+							sizeType: 'Unknown',
+							sha1: hashes.sha1.slice(0, 40),
+							sha256: hashes.sha256.slice(0, 64),
+							modelHash: hashes.modelHash.slice(0, 16),
+							sizeMB: size,
+							itemId: itemData.id,
+							uploaderId: user.sub,
+							format: 'SafeTensors',
+						})
+						.returning()
+				)[0]
+				res.status(200).json({ message: 'File uploaded', data })
+				return
+			} catch (e) {
+				Logger.error(e)
+				res.status(500).json({ error: 'Could not read header', detail: Env.SPARKUI_CORE_DEBUG ? e.message : undefined })
+				return
+			}
+
+			res.status(200).json({ message: 'File uploaded' })
+		})
+		req.on('error', (e) => {
+			Logger.error(e)
+			res.status(500).json({ error: 'Could not upload file!', detail: Env.SPARKUI_CORE_DEBUG ? e.message : undefined })
+		})
+	} catch (e) {
+		res.status(500).json({ error: 'Failed retreiving item', details: Env.SPARKUI_CORE_DEBUG ? e.message : undefined })
+		return
+	}
+})
 
 // Delete a model
 router.delete('/items/:mID', async (req: Request, res: Response) => {
