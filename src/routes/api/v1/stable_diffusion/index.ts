@@ -43,7 +43,6 @@ import * as DirUtils from '$/utils/DirUtils'
 import { v4 } from 'uuid'
 
 const router = Router()
-router.use(authMiddleware)
 
 // ---> Query Endpoints <--- //
 // Query Modeles

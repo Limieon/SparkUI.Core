@@ -18,7 +18,6 @@ const upload = multer({
 })
 
 const router = Router()
-router.use(authMiddleware)
 
 router.get('/avatar', async (req: Request, res: Response) => {
 	if (!req.user) {

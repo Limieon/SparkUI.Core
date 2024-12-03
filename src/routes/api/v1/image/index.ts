@@ -12,7 +12,7 @@ import Logger from '@log'
 import { validateQuerySchema } from '$/Router'
 
 const router = Router()
-router.use(authMiddleware)
+
 router.get('/', async (req: Request, res: Response) => {
 	const user = req.user!
 	const images = await db

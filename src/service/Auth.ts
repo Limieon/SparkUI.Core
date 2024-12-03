@@ -94,11 +94,12 @@ async function getTokenCookies(req: Request): Promise<{ access?: string; refresh
 }
 
 export const authMiddleware: RequestHandler = async (req: Request, res: Response, next: NextFunction) => {
-	Logger.debug('Running Auth Middleware')
-	if (req.url.startsWith('/auth')) {
+	if (req.originalUrl === '/api/v1/auth/login' || req.originalUrl === '/api/v1/auth/register') {
 		next()
 		return
 	}
+
+	Logger.debug('Running Auth Middleware', req.originalUrl, '->', req.path)
 
 	let { access, refresh } = await getTokenCookies(req)
 	let userPayload: JWTPayload | null = null
@@ -163,14 +164,11 @@ export function authenticate(accessToken: string): JWTPayload {
 export async function refreshTokens(refreshToken: string): Promise<TokenPair> {
 	if (!verifyRefreshToken(refreshToken)) throw new Error('Invalid refresh token')
 	const { sub } = decodeRefreshPayload(refreshToken)
-
-	const user = (
-		await db
-			.select({ id: Table.User.id, name: Table.User.name, refreshToken: Table.User.refreshToken })
-			.from(Table.User)
-			.where(eq(Table.User.id, sub))
-			.limit(1)
-	)[0]
+	const [user] = await db
+		.select({ id: Table.User.id, name: Table.User.name, refreshToken: Table.User.refreshToken })
+		.from(Table.User)
+		.where(eq(Table.User.id, sub))
+		.limit(1)
 
 	if (!refreshToken || user.refreshToken !== refreshToken) throw new Error('Invalid refresh token')
 

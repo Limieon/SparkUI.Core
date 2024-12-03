@@ -7,10 +7,12 @@ import Chalk, { ChalkInstance } from 'chalk'
 
 import Logger from '@log'
 import { ZodError, ZodSchema } from 'zod'
+import { authMiddleware } from './service/Auth'
 
-const handler = Express()
-handler.use(cookieParser(Env.SPARKUI_CORE_COOKIE_SECRET))
-handler.use(Express.json())
+const handle = Express()
+handle.use(cookieParser(Env.SPARKUI_CORE_COOKIE_SECRET))
+handle.use(authMiddleware)
+handle.use(Express.json())
 
 const methodColors: { [key: string]: ChalkInstance } = {
 	GET: Chalk.magenta,
@@ -28,7 +30,7 @@ const routeLogger: Express.RequestHandler = async (req: Express.Request, res: Ex
 	next()
 }
 
-if (Env.SPARKUI_CORE_DEBUG) handler.use(routeLogger)
+if (Env.SPARKUI_CORE_DEBUG) handle.use(routeLogger)
 
 export async function initRoutes(dir: string, prefix: string) {
 	async function initSubRoutes(path: string) {
@@ -43,8 +45,9 @@ export async function initRoutes(dir: string, prefix: string) {
 
 			const routerPrefix = Path.join(prefix, Path.relative(dir, path)).replaceAll('\\', '/')
 			Logger.debug('Loading route', routerPrefix)
-			const router = await import(item)
-			handler.use(routerPrefix, router.default as Express.Router)
+			const router: Router = (await import(item)).default
+
+			handle.use(routerPrefix, router)
 		}
 	}
 
@@ -95,6 +98,6 @@ export function validateQuerySchema(schema: ZodSchema<any>) {
 	}
 }
 
-export const server = handler.listen(Env.SPARKUI_CORE_PORT, () => {
+export const server = handle.listen(Env.SPARKUI_CORE_PORT, () => {
 	Logger.info(`Server listening on port ${Env.SPARKUI_CORE_PORT}`)
 })
