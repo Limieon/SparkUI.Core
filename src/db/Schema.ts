@@ -64,7 +64,7 @@ export const EControlNetType = pgEnum('EControlNetType', [
 ])
 export const EControlNetMode = pgEnum('EControlNetMode', ['Balanced', 'Prompt', 'ControlNet'])
 export const EControlNetResizeMode = pgEnum('EControlNetResizeMode', ['Resize', 'CropAndResize', 'ResizeAndFill'])
-export const ESDTrainingType = pgEnum('ESDTrainingType', ['CheckpointTrained', 'CheckpointMered', 'Unknown'])
+export const ESDTrainingType = pgEnum('ESDTrainingType', ['CheckpointTrained', 'CheckpointMerged', 'Unknown'])
 export const EDownloadStatus = pgEnum('EDownloadStatus', ['Pending', 'Downloading', 'Done', 'Failed'])
 
 export const Image = pgTable('Image', {

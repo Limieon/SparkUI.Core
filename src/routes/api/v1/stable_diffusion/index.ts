@@ -1,7 +1,7 @@
 import { authMiddleware, JWTRPayload } from '$/service/Auth'
 import e, { Router, Request, Response } from 'express'
 
-import db from '@db'
+import db, { coalesce, jsonAgg, jsonAggBuildObject, jsonBuildObject, jsonObjectAgg } from '@db'
 import * as Table from '@db/schema'
 import { encodeCursor, decodeCursor } from '@db/utils'
 
@@ -39,6 +39,7 @@ import { SafeTensors } from '$/utils/FileUtils'
 import Path from 'path'
 
 import * as DirUtils from '$/utils/DirUtils'
+import { v4 } from 'uuid'
 
 const router = Router()
 router.use(authMiddleware)
@@ -61,63 +62,76 @@ router.get('/items', validateQuerySchema(getModelsSchema), async (req: Request, 
 	const cursor = query.cursor ? decodeCursor(query.cursor) : null
 
 	try {
-		const entries = await db
-			.select()
-			.from(
-				db
-					.select()
-					.from(Table.SDBaseItem)
-					.where(
-						cursor
-							? or(
-									gt(Table.SDBaseItem.createdAt, cursor.createdAt),
-									and(eq(Table.SDBaseItem.createdAt, cursor.createdAt), gt(Table.SDBaseItem.id, cursor.id))
-							  )
-							: undefined
-					)
-					.limit(query.limit + 1)
-					.as('SDBaseItem')
-			)
-			.where(
-				and(
-					lte(Table.SDBaseItem.nsfwLevel, query.nsfw ? query.nsfw : 0),
-					query.types.length > 0 ? inArray(Table.SDBaseItem.type, query.types) : undefined
-				)
-			)
-			.innerJoin(Table.User, eq(Table.User.id, Table.SDBaseItem.creatorId))
+		const itemCreator = aliasedTable(Table.User, 'ItemCreator')
+		const fileUploader = aliasedTable(Table.User, 'FileUploader')
+
+		const entries: any[] = await db
+			.select({
+				...getTableColumns(Table.SDBaseItem),
+				creator: jsonBuildObject({ id: itemCreator.id, name: itemCreator.name }),
+				container: jsonBuildObject({
+					...getTableColumns(Table.SDContainer),
+				}),
+				images: coalesce(
+					jsonAgg(
+						jsonBuildObject({
+							id: Table.Image.id,
+						}),
+						sql`FILTER (WHERE ${Table.Image.id} IS NOT NULL)`
+					),
+					'[]'
+				),
+				files: coalesce(
+					jsonAgg(
+						jsonBuildObject({
+							...getTableColumns(Table.SDModelFile),
+							name: Table.SDModelFile.location,
+							uploader: jsonBuildObject({
+								id: fileUploader.id,
+								name: fileUploader.name,
+							}),
+						}),
+						sql`FILTER (WHERE ${Table.SDModelFile.id} IS NOT NULL)`
+					),
+					'[]'
+				),
+			})
+			.from(Table.SDBaseItem)
+			.innerJoin(itemCreator, eq(itemCreator.id, Table.SDBaseItem.creatorId))
 			.leftJoin(Table.SDContainer, eq(Table.SDContainer.id, Table.SDBaseItem.containerId))
 			.leftJoin(Table.Image, eq(Table.Image.baseItemId, Table.SDBaseItem.id))
+			.leftJoin(Table.SDModelFile, eq(Table.SDBaseItem.id, Table.SDModelFile.itemId))
+			.leftJoin(fileUploader, eq(fileUploader.id, Table.SDModelFile.uploaderId))
+			.where(
+				and(
+					lte(Table.SDBaseItem.nsfwLevel, query.nsfw),
+					cursor
+						? or(
+								gt(Table.SDBaseItem.createdAt, cursor.createdAt),
+								and(eq(Table.SDBaseItem.createdAt, cursor.createdAt), gt(Table.SDBaseItem.id, cursor.id))
+						  )
+						: undefined
+				)
+			)
+			.groupBy(Table.SDBaseItem.id, itemCreator.id, Table.SDContainer.id)
+			.limit(query.limit + 1)
 
 		if (entries.length < 1) {
 			res.status(404).json({ error: 'No matching items found' })
 			return
 		}
 
-		const data: Schemas.ItemType[] = []
-		let lastID: string | null = null
-		for (let e of entries) {
-			const { id } = e.SDBaseItem
-			if (lastID !== id) {
-				data.push(
-					Schemas.Item.parse({
-						...e.SDBaseItem,
-						creator: e.User,
-						container: e.SDContainer,
-						images: [],
-					})
-				)
+		const data: Schemas.ItemType[] = entries.map((e) => {
+			return Schemas.Item.parse({
+				...e,
+			})
+		})
 
-				lastID = id
-			}
-
-			if (e.Image == undefined) continue
-			data[data.length - 1].images.push(ImageSchemas.RefImage.parse(e.Image))
-		}
 		const count = data.length
-
 		res.json({
 			data: data.slice(0, query.limit),
 			meta: {
+				count,
 				nextCursor:
 					count > query.limit
 						? encodeCursor({
@@ -306,6 +320,8 @@ router.get('/items/:mID', validateQuerySchema(getModelSchema), async (req: Reque
 			.innerJoin(Table.SDContainer, eq(Table.SDContainer.id, Table.SDBaseItem.containerId))
 			.leftJoin(Table.Image, eq(Table.Image.baseItemId, Table.SDBaseItem.id))
 			.innerJoin(Table.User, eq(Table.User.id, Table.SDBaseItem.creatorId))
+			.innerJoin(Table.SDModelFile, eq(Table.SDBaseItem.id, Table.SDModelFile.itemId))
+			.innerJoin(aliasedTable(Table.User, 'FileUploader'), eq(Table.User.id, Table.SDModelFile.uploaderId))
 			.where(eq(Table.SDBaseItem.id, query.mID))
 
 		if (entries.length < 1) {
@@ -318,11 +334,20 @@ router.get('/items/:mID', validateQuerySchema(getModelSchema), async (req: Reque
 			creator: entries[0].User,
 			container: entries[0].SDContainer,
 			images: [],
+			files: [],
 		})
 
 		for (let e of entries) {
-			if (e.Image == undefined) continue
-			data.images.push(ImageSchemas.RefImage.parse(e.Image))
+			if (e.Image != undefined) data.images.push(ImageSchemas.RefImage.parse(e.Image))
+			if (e.SDModelFile != undefined) {
+				data.files.push(
+					Schemas.ModelFile.parse({
+						name: Path.basename(e.SDModelFile.location!),
+						uploader: { id: e.FileUploader.id, name: e.FileUploader.name },
+						...e.SDModelFile,
+					})
+				)
+			}
 		}
 
 		res.status(200).json({ data, meta: {} })
@@ -561,6 +586,7 @@ router.put('/items/:mID/file', async (req: Request, res: Response) => {
 				const itemDir = Path.dirname(itemPath)
 				if (!FS.existsSync(itemDir)) FS.mkdirSync(itemDir, { recursive: true })
 
+				Logger.debug('Moving file to', itemPath)
 				FS.renameSync(tempFilePath, itemPath)
 
 				const data = (

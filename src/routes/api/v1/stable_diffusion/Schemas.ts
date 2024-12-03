@@ -4,6 +4,8 @@ import * as ImageSchemas from '../image/Schemas'
 
 import * as Table from '@db/schema'
 
+import Path from 'path'
+
 export const RefItem = z.object({
 	id: z.string().uuid(),
 	name: z.string(),
@@ -42,6 +44,22 @@ export const UpdateContainer = Container.omit({
 })
 export type UpdateContainerType = z.infer<typeof UpdateContainer>
 
+export const ModelFile = z.object({
+	id: z.string().uuid(),
+	name: z.string().transform((v) => Path.basename(v)),
+	sha1: z.string(),
+	sha256: z.string(),
+	modelHash: z.string(),
+	sizeMB: z.number(),
+	format: z.string().optional().nullable(),
+	precision: z.string(),
+
+	uploader: UserSchemas.RefUser,
+
+	createdAt: z.string().transform((v) => new Date(v)),
+})
+export type ModelFileType = z.infer<typeof ModelFile>
+
 export const Item = z.object({
 	id: z.string().uuid(),
 
@@ -59,28 +77,13 @@ export const Item = z.object({
 	container: RefContainer,
 	creator: UserSchemas.RefUser,
 	images: z.array(ImageSchemas.RefImage),
+	files: z.array(ModelFile),
 
 	createdAt: z.date(),
 	updatedAt: z.date(),
 	lastUsedAt: z.date().nullable(),
 })
 export type ItemType = z.infer<typeof Item>
-
-export const ModelFile = z.object({
-	id: z.string().uuid(),
-	name: z.string(),
-	sha1: z.string(),
-	sha256: z.string(),
-	modelHash: z.string(),
-	sizeMB: z.number(),
-	format: z.string().optional().nullable(),
-	precision: z.string(),
-
-	uploader: UserSchemas.RefUser,
-
-	createdAt: z.date(),
-})
-export type ModelFileType = z.infer<typeof ModelFile>
 
 export const CheckpointItem = Item.merge(
 	z.object({
