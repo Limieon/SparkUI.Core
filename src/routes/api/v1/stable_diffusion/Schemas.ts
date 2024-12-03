@@ -56,7 +56,7 @@ export const ModelFile = z.object({
 
 	uploader: UserSchemas.RefUser,
 
-	createdAt: z.string().transform((v) => new Date(v)),
+	createdAt: z.union([z.date(), z.string()]).transform((v) => (typeof v === 'string' ? new Date(v) : v)),
 })
 export type ModelFileType = z.infer<typeof ModelFile>
 

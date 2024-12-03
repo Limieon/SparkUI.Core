@@ -244,28 +244,34 @@ router.get('/containers/:cID', validateQuerySchema(getContainerSchema), async (r
 	const query = req.query as unknown as GetContainerType
 
 	try {
-		const entries = await db
-			.select()
+		const [entry] = await db
+			.select({
+				...getTableColumns(Table.SDContainer),
+				creator: jsonBuildObject({ id: Table.User.id, name: Table.User.name }),
+				items: coalesce(
+					jsonAgg(
+						jsonBuildObject({
+							id: Table.SDBaseItem.id,
+							name: Table.SDBaseItem.name,
+							description: Table.SDBaseItem.description,
+							brief: Table.SDBaseItem.brief,
+						}),
+						sql`FILTER (WHERE ${Table.SDBaseItem.id} IS NOT NULL)`
+					),
+					'[]'
+				),
+			})
 			.from(Table.SDContainer)
 			.leftJoin(Table.SDBaseItem, eq(Table.SDContainer.id, Table.SDBaseItem.containerId))
 			.innerJoin(Table.User, eq(Table.SDContainer.creatorId, Table.User.id))
 			.where(eq(Table.SDContainer.id, query.cID))
 
-		if (entries.length < 1) {
+		if (entry == undefined) {
 			res.status(404).json({ error: 'No matching items found' })
 			return
 		}
 
-		let data: Schemas.ContainerType = Schemas.Container.parse({
-			...entries[0].SDContainer,
-			creator: entries[0].User,
-			items: [],
-		})
-		for (let e of entries) {
-			if (e.SDBaseItem == undefined) continue
-			data.items.push(Schemas.RefItem.parse(e.SDBaseItem))
-		}
-
+		let data: Schemas.ContainerType = Schemas.Container.parse({ ...entry })
 		res.json({ data, meta: {} })
 	} catch (e) {
 		if (e instanceof Error) res.status(500).json({ error: e.message })
