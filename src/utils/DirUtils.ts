@@ -16,6 +16,10 @@ export function getTempFilePath() {
 }
 
 export function getModelFilePath(name: string, extension: string, modelType: ESDItemType) {
+	if (name.endsWith(extension)) {
+		name = name.slice(0, -(extension.length + 1))
+	}
+
 	let fodlerName: string = 'unknown'
 	switch (modelType) {
 		case 'Checkpoint':

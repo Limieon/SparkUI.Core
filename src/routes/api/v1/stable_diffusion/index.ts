@@ -204,8 +204,6 @@ router.get('/containers', validateQuerySchema(getContainersSchema), async (req: 
 			.orderBy(asc(Table.SDContainer.createdAt), asc(Table.SDContainer.id))
 			.limit(query.limit + 1)
 
-		FS.writeFileSync('test/containers.json', JSON.stringify(entries, null, 4))
-
 		if (entries.length < 1) {
 			res.status(404).json({ error: 'No matching items found' })
 			return
@@ -265,6 +263,7 @@ router.get('/containers/:cID', validateQuerySchema(getContainerSchema), async (r
 			.leftJoin(Table.SDBaseItem, eq(Table.SDContainer.id, Table.SDBaseItem.containerId))
 			.innerJoin(Table.User, eq(Table.SDContainer.creatorId, Table.User.id))
 			.where(eq(Table.SDContainer.id, query.cID))
+			.groupBy(Table.SDContainer.id, Table.User.id)
 
 		if (entry == undefined) {
 			res.status(404).json({ error: 'No matching items found' })
@@ -359,40 +358,6 @@ router.get('/items/:mID', validateQuerySchema(getModelSchema), async (req: Reque
 		res.status(200).json({ data, meta: {} })
 	} catch (e) {
 		if (e instanceof Error) res.status(500).json({ error: e.message })
-		else Logger.error(e)
-	}
-})
-
-const getModelFilesSchema = z.object({
-	mID: z.string(),
-})
-type GetModelFilesType = z.infer<typeof getModelFilesSchema>
-
-router.get('/items/:mID/files', validateQuerySchema(getModelFilesSchema), async (req: Request, res: Response) => {
-	const user = req.user!
-	const query = req.query as unknown as GetModelFilesType
-
-	try {
-		const entries = await db
-			.select()
-			.from(Table.SDModelFile)
-			.where(eq(Table.SDModelFile.itemId, query.mID))
-			.innerJoin(Table.User, eq(Table.User.id, Table.SDModelFile.uploaderId))
-
-		const data: Schemas.ModelFileType[] = []
-		for (let e of entries) {
-			data.push(
-				Schemas.ModelFile.parse({
-					...e.SDModelFile,
-					name: Path.basename(e.SDModelFile.location!),
-					uploader: e.User,
-				})
-			)
-		}
-
-		res.status(200).json({ data })
-	} catch (e) {
-		if (e instanceof Error) res.status(500).json({ error: JSON.parse(e.message) })
 		else Logger.error(e)
 	}
 })
@@ -570,6 +535,12 @@ router.put('/items/:mID/file', async (req: Request, res: Response) => {
 			return
 		}
 
+		const uploadFilename = req.headers['x-filename'] as string
+		if (!uploadFilename) {
+			res.status(400).json({ error: 'X-Filename header filename provided' })
+			return
+		}
+
 		const tempFilePath = DirUtils.getTempFilePath()
 		const writeStream = FS.createWriteStream(tempFilePath)
 
@@ -580,15 +551,23 @@ router.put('/items/:mID/file', async (req: Request, res: Response) => {
 			Logger.debug('File upload complete')
 
 			const hashes = await getSDHashes(tempFilePath)
-			const size = FS.statSync(tempFilePath).size / (1024 * 1024) // MB
+			const size: number = FS.statSync(tempFilePath).size / 1024 // KB
+
+			const existingFiles = await db.select().from(Table.SDModelFile).where(eq(Table.SDModelFile.itemId, itemData.id))
+			for (let e of existingFiles) {
+				if (e.sha256 === hashes.sha256) {
+					res.status(400).json({ error: 'File already exists' })
+					FS.unlinkSync(tempFilePath)
+					return
+				}
+			}
 
 			try {
 				const header = await SafeTensors.getHeader(tempFilePath)
-				FS.writeFileSync('./header.json', JSON.stringify(header, null, 4))
 
 				const precision = SafeTensors.getDType(header)
 
-				const itemPath = DirUtils.getModelFilePath(itemData.name, 'safetensors', itemData.type)
+				const itemPath = DirUtils.getModelFilePath(uploadFilename, 'safetensors', itemData.type)
 				const itemDir = Path.dirname(itemPath)
 				if (!FS.existsSync(itemDir)) FS.mkdirSync(itemDir, { recursive: true })
 
@@ -605,7 +584,7 @@ router.put('/items/:mID/file', async (req: Request, res: Response) => {
 							sha1: hashes.sha1.slice(0, 40),
 							sha256: hashes.sha256.slice(0, 64),
 							modelHash: hashes.modelHash.slice(0, 16),
-							sizeMB: size,
+							sizeKB: size,
 							itemId: itemData.id,
 							uploaderId: user.sub,
 							format: 'SafeTensors',
@@ -617,10 +596,7 @@ router.put('/items/:mID/file', async (req: Request, res: Response) => {
 			} catch (e) {
 				Logger.error(e)
 				res.status(500).json({ error: 'Could not read header', detail: Env.SPARKUI_CORE_DEBUG ? e.message : undefined })
-				return
 			}
-
-			res.status(200).json({ message: 'File uploaded' })
 		})
 		req.on('error', (e) => {
 			Logger.error(e)

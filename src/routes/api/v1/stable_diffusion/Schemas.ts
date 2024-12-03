@@ -50,7 +50,7 @@ export const ModelFile = z.object({
 	sha1: z.string(),
 	sha256: z.string(),
 	modelHash: z.string(),
-	sizeMB: z.number(),
+	sizeKB: z.number(),
 	format: z.string().optional().nullable(),
 	precision: z.string(),
 
@@ -122,6 +122,7 @@ export const UpdateItem = Item.omit({
 	createdAt: true,
 	updatedAt: true,
 	lastUsedAt: true,
+	files: true,
 })
 export type UpdateItemType = z.infer<typeof UpdateItem>
 
@@ -133,6 +134,7 @@ export const UpdateCheckpointItem = CheckpointItem.omit({
 	createdAt: true,
 	updatedAt: true,
 	lastUsedAt: true,
+	files: true,
 })
 export type UpdateCheckpointItemType = z.infer<typeof UpdateCheckpointItem>
 
@@ -144,6 +146,7 @@ export const UpdateLoraItem = LoraItem.omit({
 	createdAt: true,
 	updatedAt: true,
 	lastUsedAt: true,
+	files: true,
 })
 export type UpdateLoraItemType = z.infer<typeof UpdateLoraItem>
 
@@ -155,6 +158,7 @@ export const UpdateEmbeddingItem = EmbeddingItem.omit({
 	createdAt: true,
 	updatedAt: true,
 	lastUsedAt: true,
+	files: true,
 })
 export type UpdateEmbeddingItemType = z.infer<typeof UpdateEmbeddingItem>
 
@@ -166,6 +170,7 @@ export const UpdateVAEItem = VAEItem.omit({
 	createdAt: true,
 	updatedAt: true,
 	lastUsedAt: true,
+	files: true,
 })
 export type UpdateVAEItemType = z.infer<typeof UpdateVAEItem>
 
@@ -177,6 +182,7 @@ export const UpdateControlNetItem = ControlNetItem.omit({
 	createdAt: true,
 	updatedAt: true,
 	lastUsedAt: true,
+	files: true,
 })
 export type UpdateControlNetItemType = z.infer<typeof UpdateControlNetItem>
 
@@ -188,5 +194,6 @@ export const UpdateControlNetPreprocessorItem = ControlNetPreprocessorItem.omit(
 	createdAt: true,
 	updatedAt: true,
 	lastUsedAt: true,
+	files: true,
 })
 export type UpdateControlNetPreprocessorItemType = z.infer<typeof UpdateControlNetPreprocessorItem>

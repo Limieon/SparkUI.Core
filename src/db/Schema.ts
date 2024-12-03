@@ -416,7 +416,7 @@ export const SDModelFile = pgTable('SDModelFile', {
 	sha1: varchar('sha1', { length: 40 }),
 	sha256: varchar('sha256', { length: 64 }),
 	modelHash: varchar('model_hash', { length: 16 }),
-	sizeMB: float64('size').notNull(),
+	sizeKB: float64('size').notNull(),
 
 	// Foreign keys
 	itemId: uuid('item_id').references(() => SDBaseItem.id),
