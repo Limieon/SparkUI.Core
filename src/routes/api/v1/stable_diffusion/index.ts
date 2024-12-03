@@ -22,6 +22,7 @@ import {
 	getTableColumns,
 	gt,
 	inArray,
+	lt,
 	lte,
 	or,
 	sql,
@@ -114,6 +115,7 @@ router.get('/items', validateQuerySchema(getModelsSchema), async (req: Request, 
 				)
 			)
 			.groupBy(Table.SDBaseItem.id, itemCreator.id, Table.SDContainer.id)
+			.orderBy(asc(Table.SDBaseItem.createdAt), asc(Table.SDBaseItem.id))
 			.limit(query.limit + 1)
 
 		if (entries.length < 1) {
@@ -165,59 +167,57 @@ router.get('/containers', validateQuerySchema(getContainersSchema), async (req: 
 
 	try {
 		const entries = await db
-			.select()
-			.from(
-				db
-					.select()
-					.from(Table.SDContainer)
-					.where(
-						cursor
-							? or(
-									gt(Table.SDContainer.createdAt, cursor.createdAt),
-									and(eq(Table.SDContainer.createdAt, cursor.createdAt), gt(Table.SDContainer.id, cursor.id))
-							  )
-							: undefined
-					)
-					.limit(query.limit + 1)
-					.as('SDContainer')
-			)
+			.select({
+				...getTableColumns(Table.SDContainer),
+				creator: jsonBuildObject({ id: Table.User.id, name: Table.User.name }),
+				items: coalesce(
+					jsonAgg(
+						jsonBuildObject({
+							id: Table.SDBaseItem.id,
+							name: Table.SDBaseItem.name,
+							description: Table.SDBaseItem.description,
+							brief: Table.SDBaseItem.brief,
+						}),
+						sql`FILTER (WHERE ${Table.SDBaseItem.id} IS NOT NULL)`
+					),
+					'[]'
+				),
+			})
+			.from(Table.SDContainer)
 			.innerJoin(Table.User, eq(Table.User.id, Table.SDContainer.creatorId))
 			.leftJoin(Table.SDBaseItem, eq(Table.SDBaseItem.containerId, Table.SDContainer.id))
 			.where(
 				and(
-					lte(Table.SDBaseItem.nsfwLevel, query.nsfw ? query.nsfw : 0),
-					query.types.length > 0 ? inArray(Table.SDBaseItem.type, query.types) : undefined
+					and(
+						lte(coalesce(Table.SDBaseItem.nsfwLevel, sql`0`), query.nsfw ? query.nsfw : 0),
+						query.types.length > 0 ? inArray(Table.SDBaseItem.type, query.types) : undefined
+					),
+					cursor
+						? or(
+								gt(Table.SDContainer.createdAt, cursor.createdAt),
+								and(eq(Table.SDContainer.createdAt, cursor.createdAt), gt(Table.SDContainer.id, cursor.id))
+						  )
+						: undefined
 				)
 			)
+			.groupBy(Table.SDContainer.id, Table.User.id)
+			.orderBy(asc(Table.SDContainer.createdAt), asc(Table.SDContainer.id))
+			.limit(query.limit + 1)
+
+		FS.writeFileSync('test/containers.json', JSON.stringify(entries, null, 4))
 
 		if (entries.length < 1) {
 			res.status(404).json({ error: 'No matching items found' })
 			return
 		}
 
-		let lastID: string | null = null
-		const data: Schemas.ContainerType[] = []
-		for (let e of entries) {
-			const { id } = e.SDContainer
-			if (lastID !== id) {
-				data.push(
-					Schemas.Container.parse({
-						...e.SDContainer,
-						creator: e.User,
-						items: [],
-					})
-				)
-				lastID = id
-			}
-
-			if (e.SDBaseItem == undefined) continue
-			data[data.length - 1].items.push(Schemas.RefItem.parse(e.SDBaseItem))
-		}
+		const data: Schemas.ContainerType[] = entries.map((e) => Schemas.Container.parse({ ...e }))
 		const count = data.length
 
 		res.json({
 			data: data.slice(0, query.limit),
 			meta: {
+				count: count - 1,
 				nextCursor:
 					count > query.limit
 						? encodeCursor({
