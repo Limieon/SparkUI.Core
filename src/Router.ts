@@ -25,8 +25,10 @@ const methodColors: { [key: string]: ChalkInstance } = {
 }
 
 const routeLogger: Express.RequestHandler = async (req: Express.Request, res: Express.Response, next: Express.NextFunction) => {
+	const address = `${req.socket.remoteAddress?.split(':').pop() || 'unknown'}:${req.socket.remotePort}`
+	const httpVersion = req.httpVersion
 	const color = methodColors[req.method] || Chalk.white
-	Logger.debug(`${color(req.method)}${' '.repeat(7 - req.method.length)} ${req.url}`)
+	Logger.debug(`${address} - ${color(req.method)} ${req.url} - HTTP/${httpVersion}`)
 	next()
 }
 
